@@ -119,10 +119,13 @@ void begin(TFT_eSPI* tft) {
     if (!s_audioBuf) s_audioBuf = (uint8_t*)malloc(kAudioBufBytes);
     if (!s_freeQ) s_freeQ = xQueueCreate(kRingSlots, sizeof(int));
     if (!s_fullQ) s_fullQ = xQueueCreate(kRingSlots + 1, sizeof(int));
-    // JPEGDEC emits big-endian RGB565, which is what the ILI9341 wants on the
-    // wire, so tell TFT_eSPI not to swap bytes on the way out.
-    s_jpeg.setPixelType(RGB565_BIG_ENDIAN);
-    s_tft->setSwapBytes(false);
+    // JPEGDEC emits native little-endian RGB565 in RAM. TFT_eSPI's pushImage
+    // needs swapBytes(true) for uint16 pixel data in RAM (its default
+    // expects byte-swapped image arrays from flash). The other pairing,
+    // RGB565_BIG_ENDIAN + swapBytes(false), came out with yellow rendered
+    // as blue on the ILI9341 (2026-09-03).
+    s_jpeg.setPixelType(RGB565_LITTLE_ENDIAN);
+    s_tft->setSwapBytes(true);
 }
 
 const Stats& stats() { return s_stats; }

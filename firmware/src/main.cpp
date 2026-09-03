@@ -17,7 +17,10 @@
 
 static TFT_eSPI tft;
 
-static const char* kSpikeFile = "/sdcard/test_60s.avi";
+// Spike playlist: first one that opens wins. A real episode if present,
+// else the synthetic clip.
+static const char* kSpikeFiles[] = {"/sdcard/1.avi", "/sdcard/test_60s.avi"};
+static const char* kSpikeFile = nullptr;
 
 static void setLed(bool r, bool g, bool b) {
     digitalWrite(PIN_LED_R, r ? LED_ON : LED_OFF);
@@ -61,11 +64,21 @@ void setup() {
                   (unsigned)sdcard::busKHz());
 
     player::begin(&tft);
+    for (const char* f : kSpikeFiles) {
+        FILE* fp = fopen(f, "rb");
+        if (fp) { fclose(fp); kSpikeFile = f; break; }
+    }
+    if (!kSpikeFile) {
+        showMessage("No AVI found", "Put 1.avi or test_60s.avi on the card");
+        setLed(true, false, false);
+        return;
+    }
+    Serial.printf("Playing %s\n", kSpikeFile);
     setLed(false, true, false);
 }
 
 void loop() {
-    if (!sdcard::isMounted()) {
+    if (!sdcard::isMounted() || !kSpikeFile) {
         delay(1000);
         return;
     }
