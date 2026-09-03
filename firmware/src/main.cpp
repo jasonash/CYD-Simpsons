@@ -60,7 +60,7 @@ static void checkDisplay() {
     for (int i = 0; i < 8; i++) {
         tft.fillRect(i * barW, 0, barW, DISPLAY_H, bars[i]);
     }
-    delay(1500);
+    delay(5000);
 
     tft.fillScreen(TFT_BLACK);
     tft.setTextColor(TFT_GREEN, TFT_BLACK);
