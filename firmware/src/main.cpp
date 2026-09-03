@@ -12,6 +12,12 @@
 #include <SD.h>
 #include <TFT_eSPI.h>
 #include <XPT2046_Bitbang.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include "esp_vfs_fat.h"
+#include "driver/sdspi_host.h"
+#include "driver/spi_common.h"
+#include "sdmmc_cmd.h"
 
 #include "boards/board.h"
 
@@ -92,6 +98,108 @@ static void checkSd() {
 // Sustained sequential read benchmark. Reads the largest file in the root
 // (or /bench.bin if present) in 4 KB chunks for up to 8 MB. This is the number
 // that caps total media bitrate.
+// Second opinion: the ESP-IDF sdspi host driver, which the Arduino SD library
+// sits beside (not on top of). It uses DMA transactions and multi-block
+// reads without byte-at-a-time polling, and is not clamped to 25 MHz. This
+// tears down the Arduino SD mount and re-mounts the card at /sdcard.
+static void benchSdIdf() {
+    if (sdOk) {
+        SD.end();
+        sdSpi.end();
+    }
+
+    sdmmc_host_t host = SDSPI_HOST_DEFAULT();
+    host.slot = VSPI_HOST;
+    host.max_freq_khz = SD_SPI_HZ / 1000;
+
+    spi_bus_config_t bus = {};
+    bus.mosi_io_num = PIN_SD_MOSI;
+    bus.miso_io_num = PIN_SD_MISO;
+    bus.sclk_io_num = PIN_SD_SCK;
+    bus.quadwp_io_num = -1;
+    bus.quadhd_io_num = -1;
+    bus.max_transfer_sz = 16384;
+    esp_err_t err = spi_bus_initialize(VSPI_HOST, &bus, SPI_DMA_CH_AUTO);
+    if (err != ESP_OK) {
+        logLine("IDF sdspi: bus init failed 0x%x", err);
+        return;
+    }
+
+    sdspi_device_config_t slot = SDSPI_DEVICE_CONFIG_DEFAULT();
+    slot.gpio_cs = (gpio_num_t)PIN_SD_CS;
+    slot.host_id = VSPI_HOST;
+
+    esp_vfs_fat_sdmmc_mount_config_t mnt = {};
+    mnt.format_if_mount_failed = false;
+    mnt.max_files = 4;
+    mnt.allocation_unit_size = 16 * 1024;
+
+    sdmmc_card_t* card = nullptr;
+    err = esp_vfs_fat_sdspi_mount("/sdcard", &host, &slot, &mnt, &card);
+    if (err != ESP_OK) {
+        logLine("IDF sdspi: mount failed 0x%x", err);
+        spi_bus_free(VSPI_HOST);
+        return;
+    }
+    logLine("IDF sdspi: mounted at %u kHz, %s", (unsigned)card->max_freq_khz,
+            card->cid.name);
+
+    static uint8_t buf[16384];
+    const size_t limit = 8UL * 1024UL * 1024UL;
+
+    int fd = open("/sdcard/bench.bin", O_RDONLY);
+    if (fd >= 0) {
+        size_t total = 0;
+        uint32_t t0 = millis();
+        while (total < limit) {
+            int n = read(fd, buf, sizeof(buf));
+            if (n <= 0) break;
+            total += n;
+        }
+        uint32_t dt = millis() - t0;
+        close(fd);
+        float mbps = dt > 0 ? (total / 1048576.0f) / (dt / 1000.0f) : 0.0f;
+        logLine("IDF bench posix16K: %u KB in %u ms = %.2f MB/s",
+                (unsigned)(total / 1024), (unsigned)dt, mbps);
+    } else {
+        logLine("IDF bench: open failed");
+    }
+
+    // Raw multi-sector reads, 32 sectors (16 KB) per command, 2 MB total.
+    {
+        const uint32_t per = 32, nSect = 4096;
+        uint32_t ok = 0;
+        uint32_t t0 = millis();
+        for (uint32_t sct = 2048; sct < 2048 + nSect; sct += per) {
+            if (sdmmc_read_sectors(card, buf, sct, per) == ESP_OK) ok += per;
+        }
+        uint32_t dt = millis() - t0;
+        float mbps = dt > 0 ? (ok * 512 / 1048576.0f) / (dt / 1000.0f) : 0.0f;
+        logLine("IDF bench raw16K: %u sectors in %u ms = %.2f MB/s",
+                (unsigned)ok, (unsigned)dt, mbps);
+    }
+
+    // Force the bus to 40 MHz (the driver stops at 20 MHz in SPI mode) and
+    // repeat the raw read. Tells us whether the wire clock is the ceiling.
+    if (sdspi_host_set_card_clk((sdspi_dev_handle_t)card->host.slot, 40000) == ESP_OK) {
+        const uint32_t per = 32, nSect = 4096;
+        uint32_t ok = 0;
+        uint32_t t0 = millis();
+        for (uint32_t sct = 2048; sct < 2048 + nSect; sct += per) {
+            if (sdmmc_read_sectors(card, buf, sct, per) == ESP_OK) ok += per;
+        }
+        uint32_t dt = millis() - t0;
+        float mbps = dt > 0 ? (ok * 512 / 1048576.0f) / (dt / 1000.0f) : 0.0f;
+        logLine("IDF bench raw16K@40MHz: %u/%u sectors in %u ms = %.2f MB/s",
+                (unsigned)ok, (unsigned)nSect, (unsigned)dt, mbps);
+    } else {
+        logLine("IDF bench: set 40 MHz failed");
+    }
+
+    esp_vfs_fat_sdcard_unmount("/sdcard", card);
+    spi_bus_free(VSPI_HOST);
+}
+
 static void benchSd() {
     if (!sdOk) return;
 
@@ -139,6 +247,43 @@ static void benchSd() {
                 (unsigned)(total / 1024), (unsigned)dt, sdMBps);
     }
     f.close();
+
+    // Same file through POSIX open/read: skips the stdio FILE* buffering that
+    // Arduino's File wrapper adds. Arduino mounts the card at /sd.
+    {
+        String posixPath = "/sd" + target;
+        int fd = open(posixPath.c_str(), O_RDONLY);
+        if (fd >= 0) {
+            size_t total = 0;
+            uint32_t t0 = millis();
+            while (total < limit) {
+                int n = read(fd, buf, sizeof(buf));
+                if (n <= 0) break;
+                total += n;
+            }
+            uint32_t dt = millis() - t0;
+            close(fd);
+            float mbps = dt > 0 ? (total / 1048576.0f) / (dt / 1000.0f) : 0.0f;
+            logLine("SD bench posix16K: %u KB in %u ms = %.2f MB/s",
+                    (unsigned)(total / 1024), (unsigned)dt, mbps);
+        } else {
+            logLine("SD bench posix: open failed");
+        }
+    }
+
+    // Raw sector reads, no filesystem at all: the floor of the SPI driver.
+    {
+        const uint32_t nSect = 4096;  // 2 MB
+        uint32_t t0 = millis();
+        uint32_t ok = 0;
+        for (uint32_t sct = 2048; sct < 2048 + nSect; sct++) {
+            if (SD.readRAW(buf, sct)) ok++;
+        }
+        uint32_t dt = millis() - t0;
+        float mbps = dt > 0 ? (ok * 512 / 1048576.0f) / (dt / 1000.0f) : 0.0f;
+        logLine("SD bench raw512: %u sectors in %u ms = %.2f MB/s",
+                (unsigned)ok, (unsigned)dt, mbps);
+    }
 }
 
 // Short test tone through the internal DAC so we know the amp and speaker are
@@ -183,6 +328,7 @@ void setup() {
 
     checkDisplay();
     checkMisc();
+    benchSdIdf();  // first, on a freshly powered card
     checkSd();
     benchSd();
     checkAudio();
