@@ -118,21 +118,27 @@ static void benchSd() {
         return;
     }
 
-    static uint8_t buf[4096];
+    // Run the read at several chunk sizes: the player's read granularity is
+    // a tuning knob, and this tells us how much of the ceiling is the card
+    // versus per-call FatFs overhead.
+    static uint8_t buf[16384];
     const size_t limit = 8UL * 1024UL * 1024UL;
-    size_t total = 0;
-    uint32_t t0 = millis();
-    while (total < limit) {
-        int n = f.read(buf, sizeof(buf));
-        if (n <= 0) break;
-        total += n;
+    const size_t chunks[] = {4096, 16384};
+    for (size_t chunk : chunks) {
+        f.seek(0);
+        size_t total = 0;
+        uint32_t t0 = millis();
+        while (total < limit) {
+            int n = f.read(buf, chunk);
+            if (n <= 0) break;
+            total += n;
+        }
+        uint32_t dt = millis() - t0;
+        sdMBps = dt > 0 ? (total / 1048576.0f) / (dt / 1000.0f) : 0.0f;
+        logLine("SD bench %uK: %u KB in %u ms = %.2f MB/s", (unsigned)(chunk / 1024),
+                (unsigned)(total / 1024), (unsigned)dt, sdMBps);
     }
-    uint32_t dt = millis() - t0;
     f.close();
-
-    sdMBps = dt > 0 ? (total / 1048576.0f) / (dt / 1000.0f) : 0.0f;
-    logLine("SD bench: %u KB in %u ms = %.2f MB/s", (unsigned)(total / 1024),
-            (unsigned)dt, sdMBps);
 }
 
 // Short test tone through the internal DAC so we know the amp and speaker are
