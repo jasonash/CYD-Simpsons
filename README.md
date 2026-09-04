@@ -33,6 +33,8 @@ tools/       Test media generator, helper scripts
 1. `cd firmware && pio run -t upload && pio device monitor` to flash the bring-up sketch.
 2. `tools/make_test_media.sh 30` to generate a test clip, copy it to the SD root.
 3. `converter/cyd_convert.py --out /Volumes/SD/ episodes/` to convert real episodes.
+   Sources are scaled to fill the screen and centre-cropped by default
+   (`--fit cover`); pass `--fit contain` for letterbox/pillarbox instead.
 
 ## Media format
 

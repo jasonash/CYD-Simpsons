@@ -5,7 +5,15 @@ Target: Motion JPEG video + 8-bit unsigned mono PCM audio in an AVI container,
 which is what an ESP32 without PSRAM can decode in real time.
 
 Usage:
-    cyd_convert.py [--preset balanced] [--out DIR] input1.mkv [input2.mp4 ...]
+    cyd_convert.py [--preset balanced] [--fit cover] [--out DIR] input1.mkv [input2.mp4 ...]
+
+Fit modes (how a source whose aspect ratio differs from the preset canvas is
+handled):
+    cover    scale so the picture covers the whole canvas, then centre-crop the
+             overflow. No black bars, some picture lost at the edges. Default,
+             because letterboxed video is hard to see on a 2.8" screen.
+    contain  scale so the whole picture fits, pad the rest with black
+             (letterbox / pillarbox). Nothing lost, smaller picture.
 
 Requires ffmpeg and ffprobe on PATH.
 """
@@ -41,21 +49,38 @@ PRESETS: dict[str, Preset] = {
 
 VIDEO_EXTS = {".mkv", ".mp4", ".avi", ".mov", ".m4v", ".webm", ".ts", ".wmv"}
 
+FIT_MODES = ("cover", "contain")
+
 
 def require_tool(name: str) -> None:
     if shutil.which(name) is None:
         sys.exit(f"error: {name} not found on PATH. Install ffmpeg (brew install ffmpeg).")
 
 
-def build_ffmpeg_cmd(src: Path, dst: Path, p: Preset) -> list[str]:
-    # scale with force_original_aspect_ratio=decrease then pad to the canvas:
-    # 4:3 seasons get pillarboxed, 16:9 seasons get letterboxed, automatically.
-    vf = (
-        f"fps={p.fps},"
-        f"scale={p.width}:{p.height}:force_original_aspect_ratio=decrease:flags=lanczos,"
-        f"pad={p.width}:{p.height}:(ow-iw)/2:(oh-ih)/2:color=black,"
-        f"format=yuvj420p"
-    )
+def fit_filters(p: Preset, fit: str) -> str:
+    """Scale + crop/pad filters that map any source aspect onto the canvas.
+
+    ffmpeg decides from the real pixel dimensions, so 4:3 and 16:9 seasons (and
+    re-released 4:3 episodes that were cropped to 16:9) all come out right
+    without the caller knowing which is which.
+    """
+    if fit == "cover":
+        # Scale so both dimensions are at least the canvas, then take the centre.
+        return (
+            f"scale={p.width}:{p.height}:force_original_aspect_ratio=increase:flags=lanczos,"
+            f"crop={p.width}:{p.height}"
+        )
+    if fit == "contain":
+        # Scale so both dimensions are at most the canvas, then pad with black.
+        return (
+            f"scale={p.width}:{p.height}:force_original_aspect_ratio=decrease:flags=lanczos,"
+            f"pad={p.width}:{p.height}:(ow-iw)/2:(oh-ih)/2:color=black"
+        )
+    raise ValueError(f"unknown fit mode {fit!r}")
+
+
+def build_ffmpeg_cmd(src: Path, dst: Path, p: Preset, fit: str) -> list[str]:
+    vf = f"fps={p.fps},{fit_filters(p, fit)},format=yuvj420p"
     return [
         "ffmpeg", "-hide_banner", "-y",
         "-i", str(src),
@@ -76,7 +101,7 @@ def probe(path: Path) -> dict:
     return json.loads(out)
 
 
-def write_sidecar(dst: Path, src: Path, p: Preset) -> None:
+def write_sidecar(dst: Path, src: Path, p: Preset, fit: str) -> None:
     info = probe(dst)
     video = next((s for s in info["streams"] if s["codec_type"] == "video"), {})
     fmt = info.get("format", {})
@@ -85,6 +110,7 @@ def write_sidecar(dst: Path, src: Path, p: Preset) -> None:
     sidecar = {
         "source": src.name,
         "preset": asdict(p),
+        "fit": fit,
         "duration_s": round(duration, 2),
         "frames": int(video.get("nb_frames", 0) or 0),
         "size_bytes": size,
@@ -111,6 +137,9 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("inputs", nargs="+", help="video files or directories of them")
     ap.add_argument("--preset", choices=PRESETS, default="balanced")
+    ap.add_argument("--fit", choices=FIT_MODES, default="cover",
+                    help="cover: fill the canvas and centre-crop (default); "
+                         "contain: fit inside the canvas with black bars")
     ap.add_argument("--out", type=Path, default=Path("out"), help="output directory")
     ap.add_argument("--dry-run", action="store_true", help="print ffmpeg commands only")
     ap.add_argument("--force", action="store_true", help="re-encode even if output exists")
@@ -127,7 +156,7 @@ def main() -> int:
 
     ns.out.mkdir(parents=True, exist_ok=True)
     print(f"preset {ns.preset}: {preset.width}x{preset.height} @ {preset.fps} fps, "
-          f"q{preset.qscale}, {preset.audio_hz} Hz u8 mono")
+          f"q{preset.qscale}, {preset.audio_hz} Hz u8 mono, fit {ns.fit}")
 
     failures = 0
     for i, src in enumerate(inputs, 1):
@@ -136,13 +165,13 @@ def main() -> int:
         if dst.exists() and not ns.force:
             print("  exists, skipping (use --force)")
             continue
-        cmd = build_ffmpeg_cmd(src, dst, preset)
+        cmd = build_ffmpeg_cmd(src, dst, preset, ns.fit)
         if ns.dry_run:
             print("  " + " ".join(cmd))
             continue
         try:
             subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
-            write_sidecar(dst, src, preset)
+            write_sidecar(dst, src, preset, ns.fit)
         except subprocess.CalledProcessError as e:
             failures += 1
             print(f"  FAILED: {e.stderr.strip().splitlines()[-1] if e.stderr else e}", file=sys.stderr)
