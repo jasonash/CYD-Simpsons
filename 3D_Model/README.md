@@ -1,0 +1,110 @@
+# Simpsons TV enclosure (OpenSCAD)
+
+A cartoon-accurate television case for the CYD-Simpsons player. Parametric OpenSCAD
+source, one STL per printed part, one color per part.
+
+![front](preview/front.png)
+![exploded](preview/exploded.png)
+
+## Files
+
+| File | Purpose |
+|---|---|
+| `simpsons_tv.scad` | The whole model. All dimensions are parameters at the top. |
+| `export.sh` | Renders every part to `stl/` and refreshes `preview/`. |
+| `stl/*.stl` | Print-ready parts, already in print orientation. |
+| `preview/*.png` | Assembly renders. |
+
+Render one part by hand:
+
+```bash
+/Applications/OpenSCAD-2021.01.app/Contents/MacOS/OpenSCAD -D 'part="knob"' -o stl/knob.stl simpsons_tv.scad
+```
+
+Open `simpsons_tv.scad` in OpenSCAD for the assembly view. Set `explode = 20` to
+pull it apart, `part = "plate"` to see every part in print orientation, and
+`show_components = false` to hide the ghosted electronics.
+
+## Parts and colors
+
+| STL | Qty | Color | Print orientation | Notes |
+|---|---|---|---|---|
+| `front_shell` | 1 | lavender | face down | No supports. Holds the CYD, the button carrier, the surround, and the grill. |
+| `rear_shell` | 1 | lavender | back panel down | No supports. Speaker vents, speaker bosses, amp and USB pockets, USB-C opening. |
+| `surround` | 1 | dark purple | face down | Drops into the front recess from the front. Glue optional. |
+| `knob` | 2 | teal or green | face down | Groove across the face is the cartoon indicator bar. |
+| `knob_keeper` | 2 | any | flat | Press or glue onto the knob stem behind the front plate. |
+| `button_carrier` | 1 | any | flat | Carries the two 6 x 6 mm tactile switches. |
+| `grill` | 1 | teal | slots up | Decorative. Glue into the front recess. |
+| `leg_l`, `leg_r` | 2 each | dark purple | on its side | Square pegs into the floor. Glue. |
+| `set_top_box` | 1 | dark purple | upside down | Pegs into the roof. Not glued: it covers the microSD hatch and the two roof screws. |
+| `antenna` | 1 | black | flat back down | Pegs into the top of the set-top box. |
+| `speaker_clamp` | 1 | any | flat | C-ring that holds the speaker flange against the back panel. |
+
+Cartoon colors: the body is lavender purple, the screen surround is a very dark
+purple, the legs and set-top box a deeper purple, the knobs and grill teal-green,
+the antenna black. Hex values used in the preview are listed at the top of the SCAD.
+
+## Hardware
+
+All screws are M3, driven into printed 2.5 mm pilot holes (self-tapping into PLA or PETG).
+
+| Use | Qty | Screw |
+|---|---|---|
+| CYD to front shell standoffs | 4 | M3 x 6 pan head |
+| Button carrier to front shell | 2 | M3 x 6 pan head |
+| Rear shell to front shell tabs (roof and floor) | 4 | M3 x 6 or x 8 countersunk |
+| Speaker clamp | 3 | M3 x 6 pan head |
+
+Other parts: 2 x 6 x 6 x 5 mm through-hole tactile switches, the 40 mm speaker,
+the PAM8302 amp, the USB-C breakout, wire, and a little CA glue.
+
+## Layout
+
+- Front 118 x 90 mm, body 65 mm deep, legs add 14 mm. Aspect ratio follows the cartoon.
+- The CYD is mounted with its USB ports on the left and the microSD slot on the top
+  edge, i.e. rotated 180 degrees from the usual drawing. The firmware must use display
+  rotation 3 instead of 1 (and the touch map flips with it).
+- The microSD card is reached through a hatch in the roof, hidden by the set-top box.
+- The speaker fires rearward through vents in the back panel. The front grill is decorative.
+- The USB-C breakout sits in a slide-in pocket on the back panel with its port through
+  the panel. Wire VBUS and GND to the CYD's 5 V and GND pins. Power only.
+- The amp sits in a second pocket above the USB pocket. Its own holes are only 2 mm,
+  so it is held by the pocket, not screws.
+- The rear shell slides over a lip on the front shell and is held by four countersunk
+  M3 screws through the roof and floor into tabs on the lip. The roof screws are under
+  the set-top box, the floor screws are out of sight.
+
+## Assembly order
+
+1. Solder the two tactile switches to the button carrier (pins through the four holes
+   per switch, plungers facing the front). Wire them to CYD GPIOs.
+2. Screw the CYD to the four standoffs in the front shell, screen toward the plate.
+3. Screw the button carrier to its two bosses.
+4. Push each knob stem through its hole from the front and press a keeper onto the stem
+   from behind. Leave about 0.3 mm of play so the knob can travel. Glue the keeper.
+5. Drop the surround into the front recess. Glue the grill into its recess.
+6. Screw the speaker into the rear shell with the clamp ring, solder tabs in the notch.
+   Slide the amp and USB breakout into their pockets and wire everything.
+7. Push the rear shell onto the front shell lip and drive the four countersunk screws.
+8. Glue the legs into the floor. Push the set-top box onto its roof pegs and the antenna
+   into the box.
+
+## Verify before printing the shells
+
+These numbers came from drawings, not from measuring the actual parts. Print the small
+parts first, then check these against your hardware and adjust the parameters:
+
+- `cyd_glass` (4.5 mm): height of the CYD glass above the PCB front face. This sets the
+  standoff height. Measure it with calipers.
+- `cyd_screen_cx` (43.0 mm): centre of the visible screen area from the board edge.
+  Check that the window is centred on the picture.
+- `usb_pcb_w`, `usb_pcb_l`, `usb_conn_h`: the USB-C breakout. Listed as 13 x 22 mm
+  with a 1 to 2 mm measurement error on the seller's drawing.
+- `spk_notch_angle` (150 degrees): rotate the speaker so its solder tabs sit in the
+  clamp notch. The three bosses are 120 degrees apart, so any orientation works.
+- Tactile switch height `sw_h` (5.0 mm). The switch travel is about 0.25 mm, and the knob
+  stem rests on the plunger with 0.1 mm of pretravel.
+
+The reference STEP file in `reference_materials/` is for the 3.5-inch CYD (ER-TFT035),
+not the 2.8-inch board this project uses, so it was not used for dimensions.
