@@ -102,8 +102,8 @@ the PAM8302 amp, the USB-C breakout, wire, and a little CA glue.
 These numbers came from drawings, not from measuring the actual parts. Print the small
 parts first, then check these against your hardware and adjust the parameters:
 
-- `cyd_glass` (4.5 mm): height of the CYD glass above the PCB front face. This sets the
-  standoff height. Measure it with calipers.
+- `cyd_glass` (3.9 mm): height of the CYD glass above the PCB front face, measured at
+  3.89 mm on the board in hand. Sets the standoff height. Re-check on any other board.
 - `cyd_screen_cx` (43.0 mm): centre of the visible screen area from the board edge.
   Check that the window is centred on the picture.
 - `usb_pcb_w`, `usb_pcb_l`, `usb_conn_h`: the USB-C breakout. Listed as 13 x 22 mm

@@ -80,7 +80,7 @@ cyd_w = 86.1; cyd_h = 49.9; cyd_t = 1.6;
 cyd_hole_d = 3.2; cyd_hole_in_x = 3.83; cyd_hole_in_z = 3.98;
 cyd_screen_cx = 43.0;           // visible area centre from the board's left edge
 cyd_glass_w = 69; cyd_glass_h = 50;
-cyd_glass = 4.5;                // glass top above PCB front face (MEASURE AND ADJUST)
+cyd_glass = 3.9;                // glass top above PCB front face (measured 3.89 on 2026-09-04)
 glass_gap = 0.5;                // gap between surround plug and glass
 cyd_x0 = sur_cx - cyd_screen_cx;
 cyd_z0 = sur_cz - cyd_h/2;
