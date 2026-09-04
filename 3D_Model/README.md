@@ -21,9 +21,16 @@ Render one part by hand:
 /Applications/OpenSCAD-2021.01.app/Contents/MacOS/OpenSCAD -D 'part="knob"' -o stl/knob.stl simpsons_tv.scad
 ```
 
-Open `simpsons_tv.scad` in OpenSCAD for the assembly view. Set `explode = 20` to
-pull it apart, `part = "plate"` to see every part in print orientation, and
-`show_components = false` to hide the ghosted electronics.
+Open `simpsons_tv.scad` in OpenSCAD for the assembly view. The variables at the top
+of the file control it (Window > Customizer shows them as checkboxes and sliders,
+then press F5):
+
+- `explode = 20` pulls the assembly apart.
+- `show_front_shell`, `show_rear_shell`, `show_surround`, `show_knobs`, `show_grill`,
+  `show_legs`, `show_set_top_box`, `show_speaker_clamp`, `show_components` hide parts.
+- `cut_x = 60` slices the model to show a section through the middle. `cut_y` and
+  `cut_z` do the same on the other axes. `-1` turns a cut off.
+- `part = "plate"` shows every part in print orientation.
 
 ## Parts and colors
 

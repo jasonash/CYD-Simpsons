@@ -10,8 +10,25 @@
 // All dimensions in mm.
 
 part = "assembly";          // see export() for names
-show_components = true;     // ghost the electronics in the assembly view
-explode = 0;                // assembly explode distance (0 = assembled)
+explode = 0;                // [0:1:40] assembly explode distance (0 = assembled)
+
+/* [Assembly view: what to show] */
+show_components = true;     // ghost the electronics
+show_front_shell = true;
+show_rear_shell = true;
+show_surround = true;
+show_knobs = true;          // knobs, keepers and the button carrier
+show_grill = true;
+show_legs = true;
+show_set_top_box = true;    // box and antenna
+show_speaker_clamp = true;
+
+/* [Assembly view: cutaway] */
+// Remove everything below the plane. -1 = off. Try cut_x = 60 for a section
+// through the middle, or cut_y = 30 to look into the rear shell from the front.
+cut_x = -1;                 // [-1:1:118]
+cut_y = -1;                 // [-1:1:65]
+cut_z = -1;                 // [-1:1:110]
 
 $fa = 2; $fs = 0.4;
 EPS = 0.01;
@@ -425,21 +442,35 @@ module ghost_components() {
 /* Assembly                                                            */
 /* ================================================================== */
 module assembly() {
-    e = explode;
-    color(C_FRONT) translate([0, -e, 0]) front_shell();
-    color(C_FRONT) translate([0, e, 0]) rear_shell();
-    color(C_DARK) translate([sur_cx, -2*e, sur_cz]) surround();
-    for (z = knob_z) {
-        color(C_TEAL) translate([knob_x, -(knob_gap + knob_t) - 3*e, z]) knob();
-        color(C_TEAL) translate([knob_x, plate_t + 0.3 - e, z]) knob_keeper();
+    difference() {
+        assembly_parts();
+        // cutting boxes are kept close to the model: a box that encloses the
+        // camera breaks the OpenCSG preview
+        if (cut_x >= 0) translate([-30, -60, -30]) cube([30 + cut_x, D + 120, H + 100]);
+        if (cut_y >= 0) translate([-30, -60, -30]) cube([W + 60, 60 + cut_y, H + 100]);
+        if (cut_z >= 0) translate([-30, -60, -30]) cube([W + 60, D + 120, 30 + cut_z]);
     }
-    color(C_TEAL) translate([0, carrier_y - 0.5*e, 0]) button_carrier();
-    color(C_TEAL) translate([grill_x0, grill_recess - grill_t - 3*e, grill_z0]) grill();
-    for (i = [0 : 3])
+}
+module assembly_parts() {
+    e = explode;
+    if (show_front_shell) color(C_FRONT) translate([0, -e, 0]) front_shell();
+    if (show_rear_shell)  color(C_FRONT) translate([0, e, 0]) rear_shell();
+    if (show_surround)    color(C_DARK) translate([sur_cx, -2*e, sur_cz]) surround();
+    if (show_knobs) {
+        for (z = knob_z) {
+            color(C_TEAL) translate([knob_x, -(knob_gap + knob_t) - 3*e, z]) knob();
+            color(C_TEAL) translate([knob_x, plate_t + 0.3 - e, z]) knob_keeper();
+        }
+        color(C_TEAL) translate([0, carrier_y - 0.5*e, 0]) button_carrier();
+    }
+    if (show_grill) color(C_TEAL) translate([grill_x0, grill_recess - grill_t - 3*e, grill_z0]) grill();
+    if (show_legs) for (i = [0 : 3])
         color(C_LEG) translate([leg_pos[i][0], leg_pos[i][1], -e]) mirror([leg_pos[i][0] > W/2 ? 0 : 1, 0, 0]) leg();
-    color(C_LEG) translate([box_x0, box_y0, H + e]) set_top_box();
-    color(C_BLACK) translate([box_x0 + box_w/2, box_y0 + box_d/2, H + box_h + 2*e]) antenna();
-    color(C_TEAL) translate([spk_cx, D - wall - spk_flange_t + e, spk_cz]) rotate([90, 0, 0]) speaker_clamp();
+    if (show_set_top_box) {
+        color(C_LEG) translate([box_x0, box_y0, H + e]) set_top_box();
+        color(C_BLACK) translate([box_x0 + box_w/2, box_y0 + box_d/2, H + box_h + 2*e]) antenna();
+    }
+    if (show_speaker_clamp) color(C_TEAL) translate([spk_cx, D - wall - spk_flange_t + e, spk_cz]) rotate([90, 0, 0]) speaker_clamp();
     if (show_components) ghost_components();
 }
 
