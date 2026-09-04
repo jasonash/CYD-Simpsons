@@ -87,7 +87,8 @@ cyd_screen_cx = 45.9;           // visible area centre from the board's left (US
 cyd_screen_cz = cyd_h/2;        // visible area centre from the board's bottom edge (assumed centred)
 cyd_wall_gap = 1.5;             // board edge to the inner face of the left wall
 cyd_glass_w = 69; cyd_glass_h = 50;
-cyd_glass = 3.9;                // glass top above PCB front face (measured 3.89 on 2026-09-04)
+cyd_glass = 4.5;                // glass top above PCB front face. Boards measure 3.9 (junk bin) and 4.5 (new);
+                                // build for the tallest, a shorter board just sits deeper behind the surround
 glass_gap = 0.5;                // gap between surround plug and glass
 cyd_x0 = wall + cyd_wall_gap;   // 4. The window follows the board, never the other way round
 cyd_z0 = sur_cz - cyd_screen_cz;
