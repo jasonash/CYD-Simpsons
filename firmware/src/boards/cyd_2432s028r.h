@@ -4,7 +4,7 @@
 //   HSPI  -> display          (pins also given to TFT_eSPI via build flags)
 //   VSPI  -> microSD
 //   GPIO  -> XPT2046 touch    (not on a hardware SPI host; bit-banged)
-//   DAC1  -> GPIO26 -> onboard amp -> speaker header
+//   DAC2  -> GPIO26 -> onboard amp -> speaker header (DAC1 is GPIO25, unused)
 #pragma once
 
 #define BOARD_NAME "ESP32-2432S028R"
@@ -33,7 +33,7 @@
 #define TOUCH_RAW_MIN     200
 #define TOUCH_RAW_MAX     3700
 
-// Audio: internal 8-bit DAC channel 1 on GPIO26 feeds the onboard amplifier.
+// Audio: internal 8-bit DAC channel 2 on GPIO26 feeds the onboard amplifier and its speaker header.
 #define PIN_AUDIO_DAC     26
 #define AUDIO_SAMPLE_RATE 16000
 
