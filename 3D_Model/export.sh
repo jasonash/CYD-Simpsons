@@ -11,6 +11,8 @@ for p in ${1:-$PARTS}; do
     echo "== $p"
     "$OPENSCAD" -q -D "part=\"$p\"" -o "stl/$p.stl" simpsons_tv.scad
 done
+echo "== mesh check (one closed shell per part)"
+python3 check_stl.py --strict $(for p in ${1:-$PARTS}; do echo "stl/$p.stl"; done)
 if [ $# -eq 0 ]; then
     echo "== previews"
     "$OPENSCAD" -q -o preview/front.png    --imgsize=1400,1000 --projection=p --camera=-60,-300,170,59,30,45 --colorscheme=Tomorrow simpsons_tv.scad

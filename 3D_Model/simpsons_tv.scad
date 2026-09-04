@@ -56,10 +56,13 @@ fit = 0.2;          // clearance per side for mating parts
 /* ---------- Shell joint ---------- */
 lip_len = 6;        // lip on the front shell that enters the rear shell
 lip_t = 1.2;
+lip_root = 2;       // chamfered step inside the front shell wall that carries the lip
+lip_sink = 0.5;     // how far the lip and tabs reach back into that step
 tab_w = 10; tab_t = 4; tab_len = 9;
 tab_x = [35, 75];               // screw positions, hidden under the set-top box
 screw_y = split_y + 5;
-pilot_m3 = 2.5; clear_m3 = 3.4; csk_d = 6.4;   // all hardware is M3
+pilot_m3 = 3.0; clear_m3 = 3.4; csk_d = 6.4;   // all hardware is M3. Pilots print undersize, 3.0 taps cleanly
+boss_fillet = 1.5;  // flared base on every standoff and boss so it cannot snap off the plate
 
 /* ---------- Screen surround (dark frame) ---------- */
 sur_w = 78; sur_h = 64; sur_r = 6;
@@ -85,7 +88,7 @@ glass_gap = 0.5;                // gap between surround plug and glass
 cyd_x0 = sur_cx - cyd_screen_cx;
 cyd_z0 = sur_cz - cyd_h/2;
 cyd_y  = sur_depth + glass_gap + cyd_glass;   // PCB front face
-standoff_d = 6;
+standoff_d = 7;                 // 2 mm wall around the 3.0 mm pilot
 standoff_h = cyd_y - plate_t;
 cyd_holes = [for (x=[cyd_hole_in_x, cyd_w-cyd_hole_in_x], z=[cyd_hole_in_z, cyd_h-cyd_hole_in_z]) [cyd_x0+x, cyd_z0+z]];
 sd_cx = cyd_x0 + 50.6;          // microSD centre (board flipped)
@@ -131,7 +134,7 @@ rod_d = 3; rod_len = 42; rod_angle = 28; ball_d = 5; hub_d = 8; hub_h = 4;
 /* ---------- Speaker (40 mm, rear firing) ---------- */
 spk_d = 40.5; spk_flange_t = 2.7; spk_depth = 18; spk_magnet_d = 22;
 spk_cx = 45; spk_cz = 45;
-spk_boss_r = 23.6; spk_boss_d = 6;
+spk_boss_r = 23.6; spk_boss_d = 7;
 spk_boss_angles = [90, 210, 330];
 spk_notch_angle = 150;          // where the solder tabs sit (between bosses)
 clamp_od = 48; clamp_id = 36; clamp_t = 2;
@@ -170,6 +173,10 @@ module rprism_y(cx, cz, w, h, r, y0, y1) {
 module cyl_y(d, y0, y1) {         // cylinder along +Y
     translate([0, y0, 0]) rotate([-90, 0, 0]) cylinder(d=d, h=y1 - y0);
 }
+module boss_y(d, y0, y1) {        // cylinder along +Y with a flared (filleted) base at y0
+    cyl_y(d, y0, y1);
+    translate([0, y0, 0]) rotate([-90, 0, 0]) cylinder(d1=d + 2*boss_fillet, d2=d, h=boss_fillet);
+}
 module csk_hole_z(d, csk, t) {    // countersunk through-hole along Z, head at z=t
     translate([0, 0, -EPS]) cylinder(d=d, h=t + 2*EPS);
     translate([0, 0, t - (csk - d)/2]) cylinder(d1=d, d2=csk + 0.4, h=(csk - d)/2 + 0.2 + EPS);
@@ -178,6 +185,31 @@ module csk_hole_z(d, csk, t) {    // countersunk through-hole along Z, head at z
 /* ================================================================== */
 /* Front shell                                                         */
 /* ================================================================== */
+// Wedge ring on the inside of the front shell wall, from the inner wall face
+// (y = split_y - lip_root) out to the lip's inner face (y = split_y).
+module lip_root_ring() {
+    t = fit + lip_t;                 // step inward from the inner wall face
+    x0 = wall - EPS; x1 = W - wall + EPS;
+    z0 = wall - EPS; z1 = H - wall + EPS;
+    y0 = split_y - lip_root; y1 = split_y + EPS;
+    hull() {   // floor
+        translate([x0, y0, z0]) cube([x1 - x0, EPS, EPS]);
+        translate([x0, y1 - EPS, z0]) cube([x1 - x0, EPS, t]);
+    }
+    hull() {   // roof
+        translate([x0, y0, z1 - EPS]) cube([x1 - x0, EPS, EPS]);
+        translate([x0, y1 - EPS, z1 - t]) cube([x1 - x0, EPS, t]);
+    }
+    hull() {   // left
+        translate([x0, y0, z0]) cube([EPS, EPS, z1 - z0]);
+        translate([x0, y1 - EPS, z0]) cube([t, EPS, z1 - z0]);
+    }
+    hull() {   // right
+        translate([x1 - EPS, y0, z0]) cube([EPS, EPS, z1 - z0]);
+        translate([x1 - t, y1 - EPS, z0]) cube([t, EPS, z1 - z0]);
+    }
+}
+
 module front_shell() {
     difference() {
         union() {
@@ -186,20 +218,29 @@ module front_shell() {
                 rbox_y(W, split_y, H, edge_r);
                 translate([wall, plate_t, wall]) cube([W - 2*wall, split_y, H - 2*wall]);
             }
-            // lip into the rear shell
-            translate([0, split_y - EPS, 0]) difference() {
-                translate([wall + fit, 0, wall + fit]) cube([W - 2*(wall + fit), lip_len, H - 2*(wall + fit)]);
-                translate([wall + fit + lip_t, -EPS, wall + fit + lip_t]) cube([W - 2*(wall + fit + lip_t), lip_len + 2*EPS, H - 2*(wall + fit + lip_t)]);
+            // lip root: a chamfered step on the inside of the wall, so the lip
+            // (which is inset by `fit` and would otherwise float) grows out of
+            // solid material. Prints as a ~55 degree ramp, no support needed.
+            lip_root_ring();
+            // lip into the rear shell, sunk into the root
+            translate([0, split_y - lip_sink, 0]) difference() {
+                translate([wall + fit, 0, wall + fit]) cube([W - 2*(wall + fit), lip_len + lip_sink, H - 2*(wall + fit)]);
+                translate([wall + fit + lip_t, -EPS, wall + fit + lip_t]) cube([W - 2*(wall + fit + lip_t), lip_len + lip_sink + 2*EPS, H - 2*(wall + fit + lip_t)]);
             }
-            // screw tabs (roof and floor)
-            for (x = tab_x) {
-                translate([x - tab_w/2, split_y - 1, wall + fit]) cube([tab_w, tab_len + 1, tab_t]);
-                translate([x - tab_w/2, split_y - 1, H - wall - fit - tab_t]) cube([tab_w, tab_len + 1, tab_t]);
+            // screw tabs (roof and floor): chamfered from lip thickness up to
+            // full thickness so they grow off the lip instead of overhanging
+            for (x = tab_x, top = [false, true]) {
+                z_lip = top ? H - wall - fit - lip_t : wall + fit;
+                z_tab = top ? H - wall - fit - tab_t : wall + fit;
+                hull() {
+                    translate([x - tab_w/2, split_y - lip_sink, z_lip]) cube([tab_w, EPS, lip_t]);
+                    translate([x - tab_w/2, split_y - lip_sink + (tab_t - lip_t), z_tab]) cube([tab_w, tab_len + lip_sink - (tab_t - lip_t), tab_t]);
+                }
             }
             // CYD standoffs
-            for (p = cyd_holes) translate([p[0], plate_t - EPS, p[1]]) cyl_y(standoff_d, 0, standoff_h + EPS);
+            for (p = cyd_holes) translate([p[0], plate_t - EPS, p[1]]) boss_y(standoff_d, 0, standoff_h + EPS);
             // button carrier bosses
-            for (p = carrier_boss) translate([p[0], plate_t - EPS, p[1]]) cyl_y(standoff_d, 0, carrier_y - plate_t + EPS);
+            for (p = carrier_boss) translate([p[0], plate_t - EPS, p[1]]) boss_y(standoff_d, 0, carrier_y - plate_t + EPS);
         }
         // screen surround recess and through cut
         rprism_y(sur_cx, sur_cz, sur_w + 2*fit, sur_h + 2*fit, sur_r + fit, -1, sur_face_t);
@@ -249,7 +290,7 @@ module rear_shell() {
             // speaker bosses
             for (a = spk_boss_angles)
                 translate([spk_cx + spk_boss_r*cos(a), depth - wall + EPS, spk_cz + spk_boss_r*sin(a)])
-                    cyl_y(spk_boss_d, -(spk_flange_t - 0.3), 0);
+                    boss_y(spk_boss_d, -(spk_flange_t - 0.3), 0);
             // board pockets (outer blocks)
             pocket_block(usb_x, usb_z, usb_pcb_w, usb_pcb_t, depth);
             pocket_block(amp_x, amp_z, amp_w, amp_t, depth);

@@ -31,12 +31,15 @@ then press F5):
 - `cut_x = 60` slices the model to show a section through the middle. `cut_y` and
   `cut_z` do the same on the other axes. `-1` turns a cut off.
 - `part = "plate"` shows every part in print orientation.
+- `export.sh` runs `check_stl.py` on every STL it writes and fails if any part is not
+  a single closed shell. Run it by hand on any STL to find floating geometry: it lists
+  each disconnected shell with its bounding box in print coordinates.
 
 ## Parts and colors
 
 | STL | Qty | Color | Print orientation | Notes |
 |---|---|---|---|---|
-| `front_shell` | 1 | lavender | face down | No supports. Holds the CYD, the button carrier, the surround, and the grill. |
+| `front_shell` | 1 | lavender | face down | No supports. Holds the CYD, the button carrier, the surround, and the grill. The lip and screw tabs grow from a chamfered step inside the wall. |
 | `rear_shell` | 1 | lavender | back panel down | No supports. Speaker vents, speaker bosses, amp and USB pockets, USB-C opening. |
 | `surround` | 1 | dark purple | face down | Drops into the front recess from the front. Glue optional. |
 | `knob` | 2 | teal or green | face down | Groove across the face is the cartoon indicator bar. |
@@ -54,7 +57,10 @@ the antenna black. Hex values used in the preview are listed at the top of the S
 
 ## Hardware
 
-All screws are M3, driven into printed 2.5 mm pilot holes (self-tapping into PLA or PETG).
+All screws are M3, driven into printed 3.0 mm pilot holes (self-tapping into PLA or PETG).
+Printed holes come out undersize, so 3.0 mm in the model is what an M3 actually taps
+into; the first print at 2.5 mm snapped a standoff off the plate when the screw went in.
+Every standoff and boss is 7 mm across with a flared base for the same reason.
 
 | Use | Qty | Screw |
 |---|---|---|
