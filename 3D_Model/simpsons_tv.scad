@@ -138,7 +138,7 @@ ant_peg_d = 4; ant_hole_d = 4.3; ant_peg_h = 5;
 rod_d = 3; rod_len = 42; rod_angle = 28; ball_d = 5; hub_d = 8; hub_h = 4;
 
 /* ---------- Speaker (40 mm, rear firing) ---------- */
-spk_d = 40.5; spk_flange_t = 2.7; spk_depth = 18; spk_magnet_d = 22;
+spk_d = 40.5; spk_flange_t = 3.5; spk_depth = 19; spk_magnet_d = 22;   // flange and depth measured 2026-09-04 (listing said 2.7 and 18)
 spk_cx = 45; spk_cz = 45;
 spk_boss_r = 23.6; spk_boss_d = 7;
 spk_boss_angles = [90, 210, 330];
