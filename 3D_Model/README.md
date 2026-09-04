@@ -80,8 +80,12 @@ the PAM8302 amp, the USB-C breakout, wire, and a little CA glue.
   rotation 3 instead of 1 (and the touch map flips with it).
 - The microSD card is reached through a hatch in the roof, hidden by the set-top box.
 - The speaker fires rearward through vents in the back panel. The front grill is decorative.
-- The USB-C breakout sits in a slide-in pocket on the back panel with its port through
-  the panel. Wire VBUS and GND to the CYD's 5 V and GND pins. Power only.
+- The USB-C breakout (22 x 17 x 2 mm, connector on the long edge) sits in a slide-in
+  pocket on the back panel with its port through the panel. Wire VBUS and GND to the
+  CYD's 5 V and GND pins. Power only.
+- The window is positioned from the CYD, not the other way round: the board sits
+  `cyd_wall_gap` from the left wall and the surround centre is `cyd_screen_cx` to the
+  right of the board edge. Changing the screen offset moves the window, never the board.
 - The amp sits in a second pocket above the USB pocket. Its own holes are only 2 mm,
   so it is held by the pocket, not screws.
 - The rear shell slides over a lip on the front shell and is held by four countersunk
@@ -110,10 +114,14 @@ parts first, then check these against your hardware and adjust the parameters:
 
 - `cyd_glass` (3.9 mm): height of the CYD glass above the PCB front face, measured at
   3.89 mm on the board in hand. Sets the standoff height. Re-check on any other board.
-- `cyd_screen_cx` (43.0 mm): centre of the visible screen area from the board edge.
-  Check that the window is centred on the picture.
-- `usb_pcb_w`, `usb_pcb_l`, `usb_conn_h`: the USB-C breakout. Listed as 13 x 22 mm
-  with a 1 to 2 mm measurement error on the seller's drawing.
+- `cyd_screen_cx` (45.9 mm): centre of the visible screen area from the board's USB
+  edge. The drawing said 43.0; the first front shell print showed the picture 2.9 mm
+  right of the window, so it is now 45.9. Confirm with the board screwed to the
+  standoffs. `cyd_screen_cz` does the same vertically and is assumed centred.
+- `usb_pcb_w`, `usb_pcb_l`, `usb_pcb_t`, `usb_conn_h`, `usb_conn_stick`: the USB-C
+  breakout, measured 2026-09-04 as 22 x 17 x 2.0 mm, 5.0 mm overall, connector
+  overhanging the edge by 1.5 mm. The connector body rides on the PCB, so the port
+  opening is cut the full depth of the pocket's top rail.
 - `spk_notch_angle` (150 degrees): rotate the speaker so its solder tabs sit in the
   clamp notch. The three bosses are 120 degrees apart, so any orientation works.
 - Tactile switch height `sw_h` (5.0 mm). The switch travel is about 0.25 mm, and the knob

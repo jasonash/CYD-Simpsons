@@ -66,13 +66,13 @@ boss_fillet = 1.5;  // flared base on every standoff and boss so it cannot snap 
 
 /* ---------- Screen surround (dark frame) ---------- */
 sur_w = 78; sur_h = 64; sur_r = 6;
-sur_x0 = 8; sur_z0 = 14;
+sur_z0 = 14;                    // sur_x0 is derived from the CYD position below
 sur_face_t = 1.2;               // sits in a recess of the same depth
 plug_w = 70; plug_h = 56; plug_r = 5;
 sur_depth = 5;                  // total depth of the surround
 win_w = 61; win_h = 47; win_r = 7;
 win_chamfer = 1.2;
-sur_cx = sur_x0 + sur_w/2;      // 47
+// sur_cx and sur_x0 are set in the CYD block below (they depend on cyd_x0)
 sur_cz = sur_z0 + sur_h/2;      // 46
 
 /* ---------- CYD (ESP32-2432S028R) ----------
@@ -81,12 +81,18 @@ sur_cz = sur_z0 + sur_h/2;      // 46
    Front of the PCB faces the screen. */
 cyd_w = 86.1; cyd_h = 49.9; cyd_t = 1.6;
 cyd_hole_d = 3.2; cyd_hole_in_x = 3.83; cyd_hole_in_z = 3.98;
-cyd_screen_cx = 43.0;           // visible area centre from the board's left edge
+cyd_screen_cx = 45.9;           // visible area centre from the board's left (USB) edge.
+                                // Drawing said 43.0; the 2026-09-04 fit print showed the picture
+                                // 2.9 mm right of the window, so 45.9. Verify with the board screwed down.
+cyd_screen_cz = cyd_h/2;        // visible area centre from the board's bottom edge (assumed centred)
+cyd_wall_gap = 1.5;             // board edge to the inner face of the left wall
 cyd_glass_w = 69; cyd_glass_h = 50;
 cyd_glass = 3.9;                // glass top above PCB front face (measured 3.89 on 2026-09-04)
 glass_gap = 0.5;                // gap between surround plug and glass
-cyd_x0 = sur_cx - cyd_screen_cx;
-cyd_z0 = sur_cz - cyd_h/2;
+cyd_x0 = wall + cyd_wall_gap;   // 4. The window follows the board, never the other way round
+cyd_z0 = sur_cz - cyd_screen_cz;
+sur_cx = cyd_x0 + cyd_screen_cx;   // window centred on the measured screen centre (49.9)
+sur_x0 = sur_cx - sur_w/2;      // 10.9
 cyd_y  = sur_depth + glass_gap + cyd_glass;   // PCB front face
 standoff_d = 7;                 // 2 mm wall around the 3.0 mm pilot
 standoff_h = cyd_y - plate_t;
@@ -150,10 +156,11 @@ pocket_depth = 8; pocket_wall_h = 3.2;   // slot depth into the pocket, material
 amp_l = 24.13; amp_w = 15.24; amp_t = 1.6;
 amp_x = 104; amp_z = 40;        // board centre / mid-plane
 
-/* USB-C breakout (13 x 22, power only), connector faces the rear */
-usb_pcb_w = 13; usb_pcb_l = 22; usb_pcb_t = 1.6;
-usb_conn_w = 9; usb_conn_h = 3.2; usb_conn_l = 7.5;
-usb_x = 104; usb_z = 17;        // board centre / mid-plane
+/* USB-C breakout (power only), connector on the long edge, facing the rear.
+   Measured 2026-09-04: PCB 22 x 17 x 2.0, 5.0 overall, connector overhangs the edge 1.5. */
+usb_pcb_w = 22; usb_pcb_l = 17; usb_pcb_t = 2.0;
+usb_conn_w = 9; usb_conn_h = 3.0; usb_conn_l = 7.5; usb_conn_stick = 1.5;
+usb_x = 100; usb_z = 17;        // board centre / mid-plane
 usb_open_w = 9.6; usb_open_h = 4.2;
 
 /* ================================================================== */
@@ -307,8 +314,9 @@ module rear_shell() {
         // board slots and the USB port opening
         pocket_slot(usb_x, usb_z, usb_pcb_w, usb_pcb_t, depth);
         pocket_slot(amp_x, amp_z, amp_w, amp_t, depth);
-        translate([usb_x - usb_open_w/2, depth - wall - 1, usb_z + usb_pcb_t/2 + usb_conn_h/2 - usb_open_h/2])
-            cube([usb_open_w, wall + 2, usb_open_h]);
+        // the connector body rides on top of the PCB, so the opening runs the full pocket depth
+        translate([usb_x - usb_open_w/2, depth - wall - pocket_depth - 1, usb_z + usb_pcb_t/2 + usb_conn_h/2 - usb_open_h/2])
+            cube([usb_open_w, pocket_depth + wall + 2, usb_open_h]);
         // shell screws (countersunk, roof and floor)
         for (x = tab_x) {
             translate([x, screw_y - split_y, 0]) csk_hole_z(clear_m3, csk_d, wall);
@@ -476,7 +484,7 @@ module ghost_components() {
     color("#7B2D8E", 0.6) translate([amp_x - amp_w/2, D - wall - amp_l, amp_z - amp_t/2]) cube([amp_w, amp_l, amp_t]);
     // USB breakout
     color("#C0392B", 0.6) translate([usb_x - usb_pcb_w/2, D - wall - usb_pcb_l, usb_z - usb_pcb_t/2]) cube([usb_pcb_w, usb_pcb_l, usb_pcb_t]);
-    color(C_METAL, 0.6) translate([usb_x - usb_conn_w/2, D - wall - usb_conn_l + 1, usb_z + usb_pcb_t/2]) cube([usb_conn_w, usb_conn_l, usb_conn_h]);
+    color(C_METAL, 0.6) translate([usb_x - usb_conn_w/2, D - wall - usb_conn_l + usb_conn_stick, usb_z + usb_pcb_t/2]) cube([usb_conn_w, usb_conn_l, usb_conn_h]);
 }
 
 /* ================================================================== */

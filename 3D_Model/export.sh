@@ -9,7 +9,7 @@ PARTS="front_shell rear_shell surround knob knob_keeper button_carrier grill leg
 mkdir -p stl preview
 for p in ${1:-$PARTS}; do
     echo "== $p"
-    "$OPENSCAD" -q -D "part=\"$p\"" -o "stl/$p.stl" simpsons_tv.scad
+    "$OPENSCAD" -q -D "part=\"$p\"" -o "stl/$p.stl" simpsons_tv.scad 2>&1 | tee /dev/stderr | grep -qiE "WARNING|ERROR" && { echo "OpenSCAD warned while rendering $p, aborting"; exit 1; }
 done
 echo "== mesh check (one closed shell per part)"
 python3 check_stl.py --strict $(for p in ${1:-$PARTS}; do echo "stl/$p.stl"; done)
