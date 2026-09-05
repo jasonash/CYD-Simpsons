@@ -1,8 +1,7 @@
-// Player core (Phase 0 spike): read interleaved AVI chunks from SD, decode
-// MJPEG frames straight to the display in MCU strips, feed PCM to the DAC,
-// and keep video paced against the audio clock. Everything runs in the
-// calling task for now so the measurements show where the time goes before
-// any core-splitting is designed.
+// Player core: read interleaved AVI chunks from SD, decode MJPEG frames
+// straight to the display in MCU strips, feed PCM to the DAC, and keep
+// video paced against the audio clock. SD reads and audio writes run in a
+// reader task on core 0; decode runs in the caller of play() (core 1).
 #pragma once
 
 #include <stdint.h>
@@ -33,9 +32,16 @@ struct Stats {
 // Attach the display. Must be initialised and rotated by the caller.
 void begin(TFT_eSPI* tft);
 
-// Play a file to the end. Blocks. Returns false if it could not be opened.
-// Prints a stats line to Serial every `reportEveryFrames` frames.
-bool play(const char* path, uint32_t reportEveryFrames = 100);
+// Polled once per frame from the decode loop; return true to stop early.
+typedef bool (*StopFn)();
+
+// Play a file to the end, or until `stop` returns true. Blocks. Returns
+// false if the file could not be opened. Prints a stats line to Serial
+// every `reportEveryFrames` frames (0 = only at the end).
+bool play(const char* path, uint32_t reportEveryFrames = 100, StopFn stop = nullptr);
+
+// True if the last play() ended because `stop` asked for it.
+bool wasStopped();
 
 const Stats& stats();
 

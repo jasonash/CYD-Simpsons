@@ -41,6 +41,8 @@ static int s_offX = 0, s_offY = 0;   // letterbox origin on screen
 static QueueHandle_t s_freeQ = nullptr;
 static QueueHandle_t s_fullQ = nullptr;
 static const int kEndOfFile = -1;
+static volatile bool s_stopReq = false;
+static bool s_wasStopped = false;
 
 struct ReaderArgs {
     avi::Reader* rd;
@@ -55,7 +57,7 @@ static void readerTask(void* p) {
     uint32_t frameIndex = 0;
     uint32_t chunkSize = 0;
 
-    for (;;) {
+    while (!s_stopReq) {
         avi::ChunkType ct = rd.nextChunk(&chunkSize);
         if (ct == avi::CHUNK_NONE) break;
 
@@ -150,7 +152,9 @@ static void report(const avi::Info& info) {
     s.winStartMs = millis();
 }
 
-bool play(const char* path, uint32_t reportEveryFrames) {
+bool wasStopped() { return s_wasStopped; }
+
+bool play(const char* path, uint32_t reportEveryFrames, StopFn stop) {
     if (!s_tft || !s_ring[0].buf || !s_audioBuf) {
         Serial.println("[player] not initialised");
         return false;
@@ -181,6 +185,8 @@ bool play(const char* path, uint32_t reportEveryFrames) {
 
     s_stats = Stats();
     s_stats.winStartMs = millis();
+    s_stopReq = false;
+    s_wasStopped = false;
 
     if (useAudio && !audio::begin(info.audioRate)) {
         Serial.println("[player] audio init failed, playing silent");
@@ -207,6 +213,16 @@ bool play(const char* path, uint32_t reportEveryFrames) {
         int slot;
         xQueueReceive(s_fullQ, &slot, portMAX_DELAY);
         if (slot == kEndOfFile) break;
+        if (!s_stopReq && stop && stop()) {
+            // Tell the reader to wind down, then keep recycling slots so it
+            // can reach its end-of-file marker (it may be blocked on freeQ).
+            s_stopReq = true;
+            s_wasStopped = true;
+        }
+        if (s_stopReq) {
+            xQueueSend(s_freeQ, &slot, portMAX_DELAY);
+            continue;
+        }
         Slot& sl = s_ring[slot];
         uint32_t ptsMs = (uint32_t)(((uint64_t)sl.index * usPerFrame) / 1000);
         uint32_t nowMs = clockMs();
@@ -244,8 +260,8 @@ bool play(const char* path, uint32_t reportEveryFrames) {
 
     s_stats.elapsedMs = millis() - t0;
     report(info);
-    Serial.printf("[player] done: %u shown, %u dropped, %u bad in %.1f s (%.2f fps overall), audio played %llu samples\n",
-                  s_stats.framesShown, s_stats.framesDropped, s_stats.framesBad,
+    Serial.printf("[player] %s: %u shown, %u dropped, %u bad in %.1f s (%.2f fps overall), audio played %llu samples\n",
+                  s_wasStopped ? "stopped" : "done", s_stats.framesShown, s_stats.framesDropped, s_stats.framesBad,
                   s_stats.elapsedMs / 1000.0f,
                   s_stats.elapsedMs ? s_stats.framesShown * 1000.0f / s_stats.elapsedMs : 0.0f,
                   useAudio ? audio::samplesPlayed() : 0ULL);
