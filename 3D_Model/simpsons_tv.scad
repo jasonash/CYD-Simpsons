@@ -16,7 +16,6 @@ explode = 0;                // [0:1:40] assembly explode distance (0 = assembled
 show_components = true;     // ghost the electronics
 show_front_shell = true;
 show_rear_shell = true;
-show_surround = true;
 show_knobs = true;          // knobs, keepers and the button carrier
 show_grill = true;
 show_legs = true;
@@ -35,7 +34,7 @@ EPS = 0.01;
 
 /* ---------- Colors (print colors, see README) ---------- */
 C_FRONT  = "#A98BDA";   // lavender: front shell, rear shell
-C_DARK   = "#2E2145";   // dark purple: screen surround
+C_DARK   = "#2E2145";   // dark purple: painted bezel (part of the front shell)
 C_LEG    = "#4B2C8F";   // purple: legs, set-top box
 C_TEAL   = "#3FB0A0";   // teal: knobs, grill
 C_BLACK  = "#1E1E1E";   // antenna
@@ -64,16 +63,22 @@ screw_y = split_y + 5;
 pilot_m3 = 3.0; clear_m3 = 3.4; csk_d = 6.4;   // all hardware is M3. Pilots print undersize, 3.0 taps cleanly
 boss_fillet = 1.5;  // flared base on every standoff and boss so it cannot snap off the plate
 
-/* ---------- Screen surround (dark frame) ---------- */
-sur_w = 78; sur_h = 64; sur_r = 6;
-sur_z0 = 14;                    // sur_x0 is derived from the CYD position below
-sur_face_t = 1.2;               // sits in a recess of the same depth
-plug_w = 70; plug_h = 56; plug_r = 5;
-sur_depth = 5;                  // total depth of the surround
-win_w = 61; win_h = 47; win_r = 7;
-win_chamfer = 1.2;
-// sur_cx and sur_x0 are set in the CYD block below (they depend on cyd_x0)
-sur_cz = sur_z0 + sur_h/2;      // 46
+/* ---------- Screen bezel (one piece with the front shell, painted dark) ----------
+   A sloped pocket in the front plate, like an old CRT set: a rounded opening at the
+   face tapers at 45 degrees down to the screen window, then a short straight tube
+   carries the window back to just above the glass. Face-down print, no support.
+   The window is cut to the panel's active area (57.6 x 43.2 on the 2.8" ILI9341),
+   not to the glass, so the module edge and the driver strip stay hidden. */
+win_w = 57; win_h = 43; win_r = 5;   // just inside the active area: a 0.5 mm centring error hides a
+                                     // sliver of picture instead of showing the module edge
+bez_inset = 6;                  // slope run per side at the face
+bez_slope = 6;                  // slope depth; equal to bez_inset gives 45 degrees, the face-down print limit
+bez_depth = 6;                  // face to the back of the tube (>= bez_slope; the glass sits glass_gap behind it)
+bez_wall = 2;                   // material outside the slope at the face; the tube is thicker deeper in
+bez_w = win_w + 2*bez_inset;    // opening at the face: 69 x 55
+bez_h = win_h + 2*bez_inset;
+bez_r = win_r + bez_inset;      // concentric corners keep the slope at 45 degrees all the way round
+win_cz = 46;                    // window centre height. win_cx is derived from the CYD position below
 
 /* ---------- CYD (ESP32-2432S028R) ----------
    Mounted with the USB ports on the LEFT and the microSD slot on the TOP edge
@@ -81,20 +86,20 @@ sur_cz = sur_z0 + sur_h/2;      // 46
    Front of the PCB faces the screen. */
 cyd_w = 86.1; cyd_h = 49.9; cyd_t = 1.6;
 cyd_hole_d = 3.2; cyd_hole_in_x = 3.83; cyd_hole_in_z = 3.98;
-cyd_screen_cx = 45.9;           // visible area centre from the board's left (USB) edge.
-                                // Drawing said 43.0; the 2026-09-04 fit print showed the picture
-                                // 2.9 mm right of the window, so 45.9. Verify with the board screwed down.
-cyd_screen_cz = cyd_h/2;        // visible area centre from the board's bottom edge (assumed centred)
+cyd_screen_cx = 45.5;           // active area centre from the board's left (USB) edge.
+                                // Jason's 2026-09-05 sketch: 16 mm bezel left, 59 active, 11 right.
+                                // The 2026-09-04 gap test on the first print gave 45.9; within 0.4 mm.
+cyd_screen_cz = cyd_h/2;        // active area centre from the board's bottom edge (measured centred, 2.5 each side)
 cyd_wall_gap = 1.5;             // board edge to the inner face of the left wall
+cyd_glass_x0 = 8;               // glass module from 8 to 77 mm on the board (the left 8 mm of it is the driver strip)
 cyd_glass_w = 69; cyd_glass_h = 50;
 cyd_glass = 4.5;                // glass top above PCB front face. Boards measure 3.9 (junk bin) and 4.5 (new);
-                                // build for the tallest, a shorter board just sits deeper behind the surround
-glass_gap = 0.5;                // gap between surround plug and glass
+                                // build for the tallest, a shorter board just sits deeper behind the bezel
+glass_gap = 0.5;                // gap between the bezel tube and the glass (resistive touch: do not press on it)
 cyd_x0 = wall + cyd_wall_gap;   // 4. The window follows the board, never the other way round
-cyd_z0 = sur_cz - cyd_screen_cz;
-sur_cx = cyd_x0 + cyd_screen_cx;   // window centred on the measured screen centre (49.9)
-sur_x0 = sur_cx - sur_w/2;      // 10.9
-cyd_y  = sur_depth + glass_gap + cyd_glass;   // PCB front face
+cyd_z0 = win_cz - cyd_screen_cz;
+win_cx = cyd_x0 + cyd_screen_cx;   // window centred on the measured screen centre (49.5)
+cyd_y  = bez_depth + glass_gap + cyd_glass;   // PCB front face (11)
 standoff_d = 7;                 // 2 mm wall around the 3.0 mm pilot
 standoff_h = cyd_y - plate_t;
 cyd_holes = [for (x=[cyd_hole_in_x, cyd_w-cyd_hole_in_x], z=[cyd_hole_in_z, cyd_h-cyd_hole_in_z]) [cyd_x0+x, cyd_z0+z]];
@@ -245,14 +250,23 @@ module front_shell() {
                     translate([x - tab_w/2, split_y - lip_sink + (tab_t - lip_t), z_tab]) cube([tab_w, tab_len + lip_sink - (tab_t - lip_t), tab_t]);
                 }
             }
+            // bezel body: a block behind the plate that the sloped pocket is cut from.
+            // Its outer edge is bez_wall outside the opening at the face; the far end
+            // is the tube that hovers glass_gap above the glass.
+            rprism_y(win_cx, win_cz, bez_w + 2*bez_wall, bez_h + 2*bez_wall, bez_r + bez_wall, 0, bez_depth);
             // CYD standoffs
             for (p = cyd_holes) translate([p[0], plate_t - EPS, p[1]]) boss_y(standoff_d, 0, standoff_h + EPS);
             // button carrier bosses
             for (p = carrier_boss) translate([p[0], plate_t - EPS, p[1]]) boss_y(standoff_d, 0, carrier_y - plate_t + EPS);
         }
-        // screen surround recess and through cut
-        rprism_y(sur_cx, sur_cz, sur_w + 2*fit, sur_h + 2*fit, sur_r + fit, -1, sur_face_t);
-        rprism_y(sur_cx, sur_cz, plug_w + 2*fit, plug_h + 2*fit, plug_r + fit, -1, plate_t + 1);
+        // screen bezel: 45 degree slope from the face opening down to the window,
+        // then the window straight through the tube
+        hull() {
+            rprism_y(win_cx, win_cz, bez_w, bez_h, bez_r, -1, -1 + EPS);
+            rprism_y(win_cx, win_cz, bez_w, bez_h, bez_r, 0, EPS);
+            rprism_y(win_cx, win_cz, win_w, win_h, win_r, bez_slope - EPS, bez_slope);
+        }
+        rprism_y(win_cx, win_cz, win_w, win_h, win_r, bez_slope - EPS, bez_depth + 1);
         // standoff pilot holes
         for (p = cyd_holes) translate([p[0], 0, p[1]]) cyl_y(pilot_m3, plate_t + 1, plate_t + standoff_h + 1);
         for (p = carrier_boss) translate([p[0], 0, p[1]]) cyl_y(pilot_m3, plate_t + 1, carrier_y + 1);
@@ -325,24 +339,6 @@ module rear_shell() {
         }
         // leg peg holes (rear pair)
         for (i = [2, 3]) translate([leg_pos[i][0] - (peg + 2*fit)/2, leg_pos[i][1] - split_y - (peg + 2*fit)/2, -1]) cube([peg + 2*fit, peg + 2*fit, wall + 2]);
-    }
-}
-
-/* ================================================================== */
-/* Screen surround: local origin at front-face centre, extends +Y      */
-/* ================================================================== */
-module surround() {
-    difference() {
-        union() {
-            rprism_y(0, 0, sur_w, sur_h, sur_r, 0, sur_face_t);
-            rprism_y(0, 0, plug_w, plug_h, plug_r, sur_face_t - EPS, sur_depth);
-        }
-        // window with a chamfered front edge (fake CRT)
-        hull() {
-            rprism_y(0, 0, win_w + 2*win_chamfer, win_h + 2*win_chamfer, win_r + win_chamfer, -1, -1 + EPS);
-            rprism_y(0, 0, win_w, win_h, win_r, win_chamfer, win_chamfer + EPS);
-        }
-        rprism_y(0, 0, win_w, win_h, win_r, win_chamfer - EPS, sur_depth + 1);
     }
 }
 
@@ -465,7 +461,7 @@ module speaker_clamp() {
 module ghost_components() {
     // CYD: PCB, glass, rear header, USB ports (left edge), microSD (top edge)
     color(C_PCB, 0.6) translate([cyd_x0, cyd_y, cyd_z0]) cube([cyd_w, cyd_t, cyd_h]);
-    color(C_GHOST) translate([cyd_x0 + cyd_screen_cx - cyd_glass_w/2, cyd_y - cyd_glass, cyd_z0]) cube([cyd_glass_w, cyd_glass, cyd_glass_h]);
+    color(C_GHOST) translate([cyd_x0 + cyd_glass_x0, cyd_y - cyd_glass, cyd_z0]) cube([cyd_glass_w, cyd_glass, cyd_glass_h]);
     color(C_GHOST) translate([cyd_x0 + 8, cyd_y + cyd_t, cyd_z0 + 30]) cube([10, 8.5, 2.5]);          // 4-pin header
     color(C_GHOST) translate([cyd_x0 - 1.5, cyd_y + cyd_t, cyd_z0 + 12]) cube([9, 3.2, 9]);           // USB-C
     color(C_GHOST) translate([cyd_x0 - 1.5, cyd_y + cyd_t, cyd_z0 + 28]) cube([8, 2.8, 8]);           // micro USB
@@ -505,7 +501,6 @@ module assembly_parts() {
     e = explode;
     if (show_front_shell) color(C_FRONT) translate([0, -e, 0]) front_shell();
     if (show_rear_shell)  color(C_FRONT) translate([0, e, 0]) rear_shell();
-    if (show_surround)    color(C_DARK) translate([sur_cx, -2*e, sur_cz]) surround();
     if (show_knobs) {
         for (z = knob_z) {
             color(C_TEAL) translate([knob_x, -(knob_gap + knob_t) - 3*e, z]) knob();
@@ -530,7 +525,6 @@ module assembly_parts() {
 module export(name) {
     if (name == "front_shell")     rotate([90, 0, 0]) front_shell();                         // face down
     else if (name == "rear_shell") translate([0, 0, D]) rotate([-90, 0, 0]) rear_shell();     // back panel down
-    else if (name == "surround")   rotate([90, 0, 0]) surround();                            // face down
     else if (name == "knob")       rotate([90, 0, 0]) knob();                                // face down, stem up
     else if (name == "knob_keeper") rotate([90, 0, 0]) knob_keeper();
     else if (name == "button_carrier") translate([0, 0, carrier_t]) rotate([-90, 0, 0]) button_carrier();
@@ -541,6 +535,7 @@ module export(name) {
     else if (name == "antenna")    translate([0, 0, rod_d/2]) rotate([90, 0, 0]) antenna();  // flat back down
     else if (name == "speaker_clamp") speaker_clamp();
     else if (name == "plate")      plate();
+    else if (name == "none")       {}                                                     // for include-based checks
     else assembly();
 }
 
@@ -548,7 +543,6 @@ module export(name) {
 module plate() {
     color(C_FRONT) export("front_shell");
     color(C_FRONT) translate([W + 15, 0, 0]) export("rear_shell");
-    color(C_DARK)  translate([sur_w/2, -30 - sur_h/2 - 20, 0]) export("surround");
     color(C_TEAL)  translate([100, -40, 0]) export("knob");
     color(C_TEAL)  translate([120, -40, 0]) export("knob_keeper");
     color(C_TEAL)  translate([40, -70, 0]) export("button_carrier");

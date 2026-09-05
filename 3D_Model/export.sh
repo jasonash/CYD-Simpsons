@@ -5,7 +5,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 OPENSCAD="${OPENSCAD:-/Applications/OpenSCAD-2021.01.app/Contents/MacOS/OpenSCAD}"
 [ -x "$OPENSCAD" ] || OPENSCAD="$(command -v openscad)"
-PARTS="front_shell rear_shell surround knob knob_keeper button_carrier grill leg_l leg_r set_top_box antenna speaker_clamp"
+PARTS="front_shell rear_shell knob knob_keeper button_carrier grill leg_l leg_r set_top_box antenna speaker_clamp"
 mkdir -p stl preview
 for p in ${1:-$PARTS}; do
     echo "== $p"
