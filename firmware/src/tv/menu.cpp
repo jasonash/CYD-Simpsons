@@ -119,6 +119,7 @@ void run(TFT_eSPI* tft) {
             case SCREEN:
                 v.flip = !v.flip;
                 tft->setRotation(settings::rotation());
+                input::setFlipped(v.flip);
                 drawAll(tft);
                 break;
             case EXIT:
