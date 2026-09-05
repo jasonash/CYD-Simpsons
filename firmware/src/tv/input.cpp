@@ -14,6 +14,9 @@ namespace input {
 static const uint32_t kPollMs = 20;
 static const uint32_t kDebounceMs = 40;     // must see the panel pressed this long
 static const uint32_t kHoldMs = 1000;       // press this long for HOLD
+// Pressure below this is a brush or panel noise. Real presses on the CYD read
+// 2200-2400 in the library's units; a stray event during the static read 192.
+static const uint16_t kMinZ = 500;
 
 static XPT2046_Bitbang s_touch(PIN_TOUCH_MOSI, PIN_TOUCH_MISO, PIN_TOUCH_CLK, PIN_TOUCH_CS);
 static QueueHandle_t s_events = nullptr;
@@ -32,7 +35,7 @@ static bool panelPressed() {
     // for tap/hold, coordinates are not needed yet.
     TouchPoint p = s_touch.getTouch();
     s_lastZ = p.zRaw;
-    return p.zRaw > 0;
+    return p.zRaw >= kMinZ;
 }
 
 static void inputTask(void*) {
@@ -88,6 +91,10 @@ Event poll() {
     int v;
     if (s_events && xQueueReceive(s_events, &v, 0) == pdTRUE) return (Event)v;
     return NONE;
+}
+
+void flush() {
+    if (s_events) xQueueReset(s_events);
 }
 
 bool pressed() { return s_pressed; }

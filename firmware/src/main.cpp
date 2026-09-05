@@ -109,6 +109,7 @@ void loop() {
         Serial.printf("Input: %s, changing episode\n", s_pending == input::HOLD ? "hold" : "tap");
         s_pending = input::NONE;
         fx::tvStatic(&tft, kStaticMs);
+        input::flush();
     }
 }
 

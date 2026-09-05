@@ -17,6 +17,10 @@ void begin();
 // Take the oldest pending event, or NONE. Cheap; call from any task.
 Event poll();
 
+// Discard pending events (after a transition, so a brush during the static
+// does not fire again).
+void flush();
+
 // True while the panel is pressed. Cheap.
 bool pressed();
 
