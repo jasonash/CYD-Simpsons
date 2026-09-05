@@ -38,8 +38,8 @@ tools/       Test media generator, helper scripts
 
 ## Media format
 
-MJPEG video (288x160, 20 to 24 fps) with 8-bit mono PCM audio in an AVI
-container. Roughly 40 to 80 MB per episode.
+MJPEG video (320x240, 15 fps by default) with 8-bit mono PCM audio in an AVI
+container. Roughly 230 MB per 22 minute episode.
 
 ## License
 

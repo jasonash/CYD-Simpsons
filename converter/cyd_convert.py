@@ -43,12 +43,13 @@ class Preset:
 # Dimensions are kept to multiples of 16 so JPEG MCU blocks tile cleanly, which
 # keeps the strip decoder simple.
 PRESETS: dict[str, Preset] = {
-    "quality": Preset(288, 160, 24, 6, 22050, "Largest files, smoothest motion"),
-    "balanced": Preset(288, 160, 20, 8, 16000, "Default. Should fit the SD budget"),
-    "smallest": Preset(224, 128, 20, 10, 16000, "For slow cards or big libraries"),
-    # The panel is 320x240 (4:3); the 16:10 presets above leave bars all
-    # round. Full-panel decode costs 1.67x the pixels of balanced.
-    "full": Preset(320, 240, 20, 8, 16000, "Fills the 320x240 panel; needs the DMA blit"),
+    # The panel is 320x240. Full-panel decode measured 2026-09-05 with the
+    # DMA blit: 45-50 ms per frame, peaks 54, so 20 fps drops ~1% of frames
+    # in busy scenes and 15 fps has headroom for effects. The Simpsons is
+    # animated on twos, so 15 fps is close to the source cadence.
+    "quality": Preset(320, 240, 20, 8, 16000, "Full panel at 20 fps; ~1% dropped frames in busy scenes"),
+    "balanced": Preset(320, 240, 15, 8, 16000, "Default. Full panel at 15 fps with decode headroom"),
+    "smallest": Preset(320, 240, 15, 12, 16000, "Full panel, smaller files, softer picture"),
 }
 
 VIDEO_EXTS = {".mkv", ".mp4", ".avi", ".mov", ".m4v", ".webm", ".ts", ".wmv"}
