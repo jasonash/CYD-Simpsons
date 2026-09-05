@@ -28,6 +28,11 @@ converter/   Python + ffmpeg tool that makes playable AVI files
 tools/       Test media generator, helper scripts
 ```
 
+## Wiring
+
+See `firmware/WIRING.md` for the external I2S amplifier, speaker, power and
+touch pins.
+
 ## Quick start
 
 1. `cd firmware && pio run -t upload && pio device monitor` to flash the bring-up sketch.
