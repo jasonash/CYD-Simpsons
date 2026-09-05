@@ -8,6 +8,7 @@
 #include "freertos/task.h"
 
 #include "../boards/board.h"
+#include "../player/audio_out.h"
 
 namespace input {
 
@@ -22,6 +23,7 @@ static XPT2046_Bitbang s_touch(PIN_TOUCH_MOSI, PIN_TOUCH_MISO, PIN_TOUCH_CLK, PI
 static QueueHandle_t s_events = nullptr;
 static volatile bool s_pressed = false;
 static bool s_started = false;
+static bool s_pollPanel = true;
 
 static void post(Event ev) {
     int v = (int)ev;
@@ -46,7 +48,7 @@ static void inputTask(void*) {
     bool holdFired = false;
 
     for (;;) {
-        bool raw = panelPressed();
+        bool raw = s_pollPanel ? panelPressed() : false;
         uint32_t now = millis();
         if (raw != rawLast) {
             rawLast = raw;
@@ -68,11 +70,19 @@ static void inputTask(void*) {
             post(HOLD);
         }
 
-        // Serial shortcuts for bench work: n = tap, m = hold.
+        // Serial shortcuts for bench work: n = tap, m = hold, 1-9 = volume
+        // 10-90%, 0 = 100%, t = toggle panel polling (audio noise hunt).
         while (Serial.available()) {
             int c = Serial.read();
             if (c == 'n') post(TAP);
             else if (c == 'm') post(HOLD);
+            else if (c >= '0' && c <= '9') {
+                audio::setVolume(c == '0' ? 100 : (c - '0') * 10);
+                Serial.printf("[audio] volume %u%%\n", audio::volume());
+            } else if (c == 't') {
+                s_pollPanel = !s_pollPanel;
+                Serial.printf("[input] panel polling %s\n", s_pollPanel ? "on" : "off");
+            }
         }
 
         vTaskDelay(pdMS_TO_TICKS(kPollMs));
