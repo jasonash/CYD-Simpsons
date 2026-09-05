@@ -39,7 +39,7 @@ then press F5):
 
 | STL | Qty | Color | Print orientation | Notes |
 |---|---|---|---|---|
-| `front_shell` | 1 | lavender, bezel painted dark purple | face down | No supports. The screen bezel is part of the shell: a 45 degree pocket from the face down to the window, painted after printing. Holds the CYD, the button carrier and the grill. The lip and screw tabs grow from a chamfered step inside the wall. |
+| `front_shell` | 1 | lavender, bezel painted dark purple | face down | No supports. The screen bezel is part of the shell: a pocket that lofts from a rectangular opening at the face down to a CRT-shaped window, painted after printing. Holds the CYD, the button carrier and the grill. The lip and screw tabs grow from a chamfered step inside the wall. |
 | `rear_shell` | 1 | lavender | back panel down | No supports. Speaker vents, speaker bosses, amp and USB pockets, USB-C opening. |
 | `knob` | 2 | teal or green | face down | Groove across the face is the cartoon indicator bar. |
 | `knob_keeper` | 2 | any | flat | Press or glue onto the knob stem behind the front plate. |
@@ -89,13 +89,20 @@ the PAM8302 amp, the USB-C breakout, wire, and a little CA glue.
 - The window is positioned from the CYD, not the other way round: the board sits
   `cyd_wall_gap` from the left wall and the window centre is `cyd_screen_cx` to the
   right of the board edge. Changing the screen offset moves the window, never the board.
-- The window (`win_w` x `win_h`, 57 x 43) is cut to the panel's active picture area,
-  not to the 69 x 50 glass. The glass, its driver strip and the module edge all sit
-  behind the bezel, so a small centring error hides a sliver of picture instead of
-  showing the edge of the module. The bezel slope runs `bez_inset` per side over
-  `bez_slope` deep (6 over 6, 45 degrees, the face-down print limit), then a straight
-  tube continues to `bez_depth` and stops `glass_gap` above the glass. Do not close
-  that gap: the touch panel is resistive and the bezel would register as a touch.
+- The window is the old-television outline: `win_w` x `win_h` (57 x 43) measured at
+  the middle of each edge, every edge bowing outward by `win_bulge` (2.5) past the
+  corner line, corners rounded `win_r` (5). It is cut to the panel's active picture
+  area, not to the 69 x 50 glass, so the glass, its driver strip and the module edge
+  all sit behind the bezel, and a small centring error hides a sliver of picture
+  instead of showing the edge of the module. The picture's own corners are clipped a
+  little by the bulge, which is how a CRT looked.
+- The opening at the face is a plain rectangle (`bez_inset` 5 outside the window at
+  the edge middles, corner radius `bez_r` 3). The pocket is a loft between the two
+  outlines, `bez_slope` (10) deep, so it is steep along the edges (63 degrees) and
+  sweeps out shallow at the corners (about 40 degrees, the shallowest spot of the
+  face-down print; the SCAD echoes both angles). A straight tube then continues to
+  `bez_depth` and stops `glass_gap` above the glass. Do not close that gap: the touch
+  panel is resistive and the bezel would register as a touch.
 - The amp sits in a second pocket above the USB pocket. Its own holes are only 2 mm,
   so it is held by the pocket, not screws.
 - The rear shell slides over a lip on the front shell and is held by four countersunk

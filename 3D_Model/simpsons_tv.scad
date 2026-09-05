@@ -64,21 +64,32 @@ pilot_m3 = 3.0; clear_m3 = 3.4; csk_d = 6.4;   // all hardware is M3. Pilots pri
 boss_fillet = 1.5;  // flared base on every standoff and boss so it cannot snap off the plate
 
 /* ---------- Screen bezel (one piece with the front shell, painted dark) ----------
-   A sloped pocket in the front plate, like an old CRT set: a rounded opening at the
-   face tapers at 45 degrees down to the screen window, then a short straight tube
-   carries the window back to just above the glass. Face-down print, no support.
+   A sloped pocket in the front plate, like an old CRT set. The opening at the face is
+   a plain rectangle with small corners; the window at the bottom is the CRT outline
+   (edges bowing outward, corners rounded); the slope is a loft between the two, so it
+   is flat and steep along the edges and sweeps wide at the corners, as in the cartoon.
+   A short straight tube then carries the window back to just above the glass.
    The window is cut to the panel's active area (57.6 x 43.2 on the 2.8" ILI9341),
    not to the glass, so the module edge and the driver strip stay hidden. */
-win_w = 57; win_h = 43; win_r = 5;   // just inside the active area: a 0.5 mm centring error hides a
-                                     // sliver of picture instead of showing the module edge
-bez_inset = 6;                  // slope run per side at the face
-bez_slope = 6;                  // slope depth; equal to bez_inset gives 45 degrees, the face-down print limit
-bez_depth = 6;                  // face to the back of the tube (>= bez_slope; the glass sits glass_gap behind it)
-bez_wall = 2;                   // material outside the slope at the face; the tube is thicker deeper in
-bez_w = win_w + 2*bez_inset;    // opening at the face: 69 x 55
+win_w = 57; win_h = 43;         // window extents at the middle of each edge (apex to apex); just inside
+                                // the active area, so a 0.5 mm centring error hides a sliver of picture
+                                // instead of showing the module edge
+win_bulge = 2.5;                // how far each edge bows out past the corner line (the CRT look)
+win_r = 5;                      // corner radius of the window
+bez_inset = 5;                  // bezel width at the middle of each edge
+bez_r = 3;                      // corner radius of the rectangular opening at the face
+bez_slope = 10;                 // slope depth. The corners are the shallow spot for a face-down print:
+                                // see the echo of the corner angle, keep it near 40 degrees or steeper
+bez_depth = 10;                 // face to the back of the tube (>= bez_slope; the glass sits glass_gap behind it)
+bez_wall = 2;                   // material outside the opening at the face
+bez_w = win_w + 2*bez_inset;    // opening at the face: 67 x 53
 bez_h = win_h + 2*bez_inset;
-bez_r = win_r + bez_inset;      // concentric corners keep the slope at 45 degrees all the way round
 win_cz = 46;                    // window centre height. win_cx is derived from the CYD position below
+// slope angle at the corners (the diagonal run is the longest): outer corner to inner corner
+bez_corner_run = sqrt(2) * (bez_inset + win_bulge + (win_r - bez_r) * (sqrt(2) - 1));
+bez_corner_angle = atan(bez_slope / bez_corner_run);
+echo(str("bezel slope: ", round(atan(bez_slope / bez_inset)), " deg at the edges, ",
+         round(bez_corner_angle), " deg at the corners (run ", round(bez_corner_run*10)/10, " mm)"));
 
 /* ---------- CYD (ESP32-2432S028R) ----------
    Mounted with the USB ports on the LEFT and the microSD slot on the TOP edge
@@ -183,6 +194,25 @@ module rbox_y(w, d, h, r) {
 module rprism_y(cx, cz, w, h, r, y0, y1) {
     translate([cx - w/2, y1, cz - h/2]) rotate([90, 0, 0]) linear_extrude(y1 - y0) rrect(w, h, r);
 }
+// CRT screen outline: a rectangle whose four edges bow outward as large arcs and
+// whose corners are rounded. w, h are the extents at the middle of the edges,
+// bulge is how far each edge bows past the corner line, r rounds the corners.
+module crt2d(w, h, bulge, r) {
+    cw = w/2 - bulge; ch = h/2 - bulge;         // corner points before rounding
+    Rx = (cw*cw + bulge*bulge) / (2*bulge);     // top/bottom arcs: chord 2cw, sagitta bulge
+    Rz = (ch*ch + bulge*bulge) / (2*bulge);     // left/right arcs: chord 2ch, sagitta bulge
+    // four explicit children: a for() inside intersection() would union its discs first
+    offset(r=r) offset(r=-r) intersection() {
+        translate([0,  (h/2 - Rx)]) circle(r=Rx, $fa=0.5);   // top edge
+        translate([0, -(h/2 - Rx)]) circle(r=Rx, $fa=0.5);   // bottom edge
+        translate([ (w/2 - Rz), 0]) circle(r=Rz, $fa=0.5);   // right edge
+        translate([-(w/2 - Rz), 0]) circle(r=Rz, $fa=0.5);   // left edge
+    }
+}
+// CRT-outline prism along +Y from y0 to y1, centred at (cx, cz).
+module crt_prism_y(cx, cz, w, h, bulge, r, y0, y1) {
+    translate([cx, y1, cz]) rotate([90, 0, 0]) linear_extrude(y1 - y0) crt2d(w, h, bulge, r);
+}
 module cyl_y(d, y0, y1) {         // cylinder along +Y
     translate([0, y0, 0]) rotate([-90, 0, 0]) cylinder(d=d, h=y1 - y0);
 }
@@ -223,6 +253,16 @@ module lip_root_ring() {
     }
 }
 
+// The bezel pocket: a loft from the rectangular opening at the face down to the
+// CRT-shaped window, then the window straight through the tube.
+module bezel_cut() {
+    hull() {
+        rprism_y(win_cx, win_cz, bez_w, bez_h, bez_r, -1, EPS);
+        crt_prism_y(win_cx, win_cz, win_w, win_h, win_bulge, win_r, bez_slope - EPS, bez_slope);
+    }
+    crt_prism_y(win_cx, win_cz, win_w, win_h, win_bulge, win_r, bez_slope - EPS, bez_depth + 1);
+}
+
 module front_shell() {
     difference() {
         union() {
@@ -259,14 +299,7 @@ module front_shell() {
             // button carrier bosses
             for (p = carrier_boss) translate([p[0], plate_t - EPS, p[1]]) boss_y(standoff_d, 0, carrier_y - plate_t + EPS);
         }
-        // screen bezel: 45 degree slope from the face opening down to the window,
-        // then the window straight through the tube
-        hull() {
-            rprism_y(win_cx, win_cz, bez_w, bez_h, bez_r, -1, -1 + EPS);
-            rprism_y(win_cx, win_cz, bez_w, bez_h, bez_r, 0, EPS);
-            rprism_y(win_cx, win_cz, win_w, win_h, win_r, bez_slope - EPS, bez_slope);
-        }
-        rprism_y(win_cx, win_cz, win_w, win_h, win_r, bez_slope - EPS, bez_depth + 1);
+        bezel_cut();
         // standoff pilot holes
         for (p = cyd_holes) translate([p[0], 0, p[1]]) cyl_y(pilot_m3, plate_t + 1, plate_t + standoff_h + 1);
         for (p = carrier_boss) translate([p[0], 0, p[1]]) cyl_y(pilot_m3, plate_t + 1, carrier_y + 1);
