@@ -34,7 +34,13 @@
 #define TOUCH_RAW_MAX     3700
 
 // Audio: internal 8-bit DAC channel 2 on GPIO26 feeds the onboard amplifier and its speaker header.
+// That path picks up noise from both SPI buses (2026-09-05), so an external
+// I2S amp (MAX98357A) is the preferred output. Only GPIO22 and GPIO27 are
+// free on the headers; the DAC line doubles as I2S data.
 #define PIN_AUDIO_DAC     26
+#define PIN_I2S_BCLK      22
+#define PIN_I2S_LRCK      27
+#define PIN_I2S_DOUT      26
 #define AUDIO_SAMPLE_RATE 16000
 
 // RGB LED is common-anode: LOW turns a color on.

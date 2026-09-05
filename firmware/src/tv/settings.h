@@ -14,6 +14,7 @@ struct Values {
     uint8_t brightness = 100;  // percent, backlight PWM
     bool invert = false;       // panel needs the inversion bit
     bool flip = false;         // rotate 180 degrees (case mount)
+    bool i2sAmp = false;       // external I2S amp instead of the internal DAC
 };
 
 // Load from NVS (defaults if nothing stored).

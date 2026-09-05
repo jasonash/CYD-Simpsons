@@ -22,13 +22,14 @@ void load() {
         s_v.brightness = p.getUChar("bri", s_v.brightness);
         s_v.invert = p.getBool("inv", s_v.invert);
         s_v.flip = p.getBool("flip", s_v.flip);
+        s_v.i2sAmp = p.getBool("i2s", s_v.i2sAmp);
         p.end();
     }
     if (s_v.volume > 100) s_v.volume = 100;
     if (s_v.brightness > 100) s_v.brightness = 100;
     if (s_v.brightness < 5) s_v.brightness = 5;
-    Serial.printf("[settings] volume %u brightness %u invert %d flip %d\n",
-                  s_v.volume, s_v.brightness, (int)s_v.invert, (int)s_v.flip);
+    Serial.printf("[settings] volume %u brightness %u invert %d flip %d i2s %d\n",
+                  s_v.volume, s_v.brightness, (int)s_v.invert, (int)s_v.flip, (int)s_v.i2sAmp);
 }
 
 void save() {
@@ -38,6 +39,7 @@ void save() {
     p.putUChar("bri", s_v.brightness);
     p.putBool("inv", s_v.invert);
     p.putBool("flip", s_v.flip);
+    p.putBool("i2s", s_v.i2sAmp);
     p.end();
 }
 
@@ -58,7 +60,10 @@ void applyBrightness() {
     ledcWrite(kBlChannel, duty);
 }
 
-void applyVolume() { audio::setVolume(s_v.volume); }
+void applyVolume() {
+    audio::setVolume(s_v.volume);
+    audio::setBackend(s_v.i2sAmp ? audio::BACKEND_I2S : audio::BACKEND_DAC);
+}
 
 void apply(TFT_eSPI* tft) {
     tft->invertDisplay(s_v.invert);

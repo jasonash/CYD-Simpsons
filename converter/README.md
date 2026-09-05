@@ -1,7 +1,7 @@
 # CYD-Simpsons converter
 
 Desktop-side tool that transcodes episodes into the only format the ESP32 can
-play in real time: MJPEG video + 8-bit unsigned mono PCM audio in an AVI.
+play in real time: MJPEG video + 16-bit mono PCM audio in an AVI.
 
 Requires ffmpeg and ffprobe (`brew install ffmpeg`). Python 3.10+, no other dependencies.
 
@@ -11,9 +11,9 @@ Requires ffmpeg and ffprobe (`brew install ffmpeg`). Python 3.10+, no other depe
 
 | Preset   | Video                  | Audio    | Use                                              |
 |----------|------------------------|----------|--------------------------------------------------|
-| quality  | 320x240 @ 20 fps, q8   | 16000 Hz | Smoothest; about 1% dropped frames in busy scenes |
-| balanced | 320x240 @ 15 fps, q8   | 16000 Hz | Default. Fills the panel with decode headroom    |
-| smallest | 320x240 @ 15 fps, q12  | 16000 Hz | Smaller files, softer picture                    |
+| quality  | 320x240 @ 20 fps, q8   | 22050 Hz | Smoothest; about 1% dropped frames in busy scenes |
+| balanced | 320x240 @ 15 fps, q8   | 22050 Hz | Default. Fills the panel with decode headroom    |
+| smallest | 320x240 @ 15 fps, q12  | 22050 Hz | Smaller files, softer picture                    |
 
 All presets fill the 320x240 panel. Sources are scaled to cover the canvas and
 centre-cropped by default (`--fit cover`); `--fit contain` letterboxes instead.

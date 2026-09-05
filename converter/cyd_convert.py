@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Convert video into the CYD-Simpsons playback format.
 
-Target: Motion JPEG video + 8-bit unsigned mono PCM audio in an AVI container,
+Target: Motion JPEG video + 16-bit mono PCM audio in an AVI container,
 which is what an ESP32 without PSRAM can decode in real time.
 
 Usage:
@@ -47,9 +47,11 @@ PRESETS: dict[str, Preset] = {
     # DMA blit: 45-50 ms per frame, peaks 54, so 20 fps drops ~1% of frames
     # in busy scenes and 15 fps has headroom for effects. The Simpsons is
     # animated on twos, so 15 fps is close to the source cadence.
-    "quality": Preset(320, 240, 20, 8, 16000, "Full panel at 20 fps; ~1% dropped frames in busy scenes"),
-    "balanced": Preset(320, 240, 15, 8, 16000, "Default. Full panel at 15 fps with decode headroom"),
-    "smallest": Preset(320, 240, 15, 12, 16000, "Full panel, smaller files, softer picture"),
+    # Audio is 16-bit mono PCM (the firmware also accepts 8-bit). 22050 Hz
+    # suits the external I2S amp; the internal DAC path works at any rate.
+    "quality": Preset(320, 240, 20, 8, 22050, "Full panel at 20 fps; ~1% dropped frames in busy scenes"),
+    "balanced": Preset(320, 240, 15, 8, 22050, "Default. Full panel at 15 fps with decode headroom"),
+    "smallest": Preset(320, 240, 15, 12, 22050, "Full panel, smaller files, softer picture"),
 }
 
 VIDEO_EXTS = {".mkv", ".mp4", ".avi", ".mov", ".m4v", ".webm", ".ts", ".wmv"}
@@ -92,7 +94,7 @@ def build_ffmpeg_cmd(src: Path, dst: Path, p: Preset, fit: str) -> list[str]:
         "-map", "0:v:0", "-map", "0:a:0?",
         "-vf", vf,
         "-c:v", "mjpeg", "-q:v", str(p.qscale), "-vtag", "MJPG",
-        "-c:a", "pcm_u8", "-ac", "1", "-ar", str(p.audio_hz),
+        "-c:a", "pcm_s16le", "-ac", "1", "-ar", str(p.audio_hz),
         "-f", "avi",
         str(dst),
     ]
@@ -166,7 +168,7 @@ def main() -> int:
 
     ns.out.mkdir(parents=True, exist_ok=True)
     print(f"preset {ns.preset}: {preset.width}x{preset.height} @ {preset.fps} fps, "
-          f"q{preset.qscale}, {preset.audio_hz} Hz u8 mono, fit {ns.fit}")
+          f"q{preset.qscale}, {preset.audio_hz} Hz s16 mono, fit {ns.fit}")
 
     failures = 0
     for i, src in enumerate(inputs, 1):

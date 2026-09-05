@@ -12,15 +12,15 @@
 namespace menu {
 
 static const uint32_t kIdleExitMs = 12000;
-static const int kRows = 5;
-static const int kRowH = 40;
-static const int kTop = 32;
+static const int kRows = 6;
+static const int kRowH = 34;
+static const int kTop = 28;
 static const int kArrowW = 48;
 static const uint16_t kBg = TFT_BLACK;
 static const uint16_t kFg = 0x07E0;       // classic OSD green
 static const uint16_t kDim = 0x03E0;
 
-enum Row { VOLUME, BRIGHTNESS, COLOURS, SCREEN, EXIT };
+enum Row { VOLUME, BRIGHTNESS, COLOURS, SCREEN, AUDIO_OUT, EXIT };
 
 static void drawRow(TFT_eSPI* tft, int row) {
     settings::Values& v = settings::values();
@@ -36,6 +36,7 @@ static void drawRow(TFT_eSPI* tft, int row) {
         case BRIGHTNESS: label = "BRIGHTNESS"; snprintf(val, sizeof(val), "%u", v.brightness); arrows = true; break;
         case COLOURS:    label = "COLOURS";    strlcpy(val, v.invert ? "INVERTED" : "NORMAL", sizeof(val)); break;
         case SCREEN:     label = "SCREEN";     strlcpy(val, v.flip ? "FLIPPED" : "NORMAL", sizeof(val)); break;
+        case AUDIO_OUT:     label = "AUDIO OUT";  strlcpy(val, v.i2sAmp ? "I2S AMP" : "ONBOARD", sizeof(val)); break;
         case EXIT:       label = "EXIT";       break;
     }
     tft->drawString(label, 16, y + kRowH / 2, 4);
@@ -43,8 +44,8 @@ static void drawRow(TFT_eSPI* tft, int row) {
         // Bar between the arrows, value on top.
         int x0 = 150 + kArrowW, x1 = DISPLAY_W - kArrowW - 8;
         int pct = row == VOLUME ? v.volume : v.brightness;
-        tft->drawRect(x0, y + 12, x1 - x0, 16, kDim);
-        tft->fillRect(x0 + 2, y + 14, ((x1 - x0 - 4) * pct) / 100, 12, kFg);
+        tft->drawRect(x0, y + 9, x1 - x0, 16, kDim);
+        tft->fillRect(x0 + 2, y + 11, ((x1 - x0 - 4) * pct) / 100, 12, kFg);
         tft->setTextDatum(MC_DATUM);
         tft->drawString("<", 150 + kArrowW / 2, y + kRowH / 2, 4);
         tft->drawString(">", DISPLAY_W - kArrowW / 2 - 8, y + kRowH / 2, 4);
@@ -121,6 +122,12 @@ void run(TFT_eSPI* tft) {
                 tft->setRotation(settings::rotation());
                 input::setFlipped(v.flip);
                 drawAll(tft);
+                break;
+            case AUDIO_OUT:
+                v.i2sAmp = !v.i2sAmp;
+                settings::applyVolume();   // also sets the backend
+                drawRow(tft, row);
+                beep();
                 break;
             case EXIT:
                 open = false;

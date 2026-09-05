@@ -58,6 +58,7 @@ static bool s_wasStopped = false;
 struct ReaderArgs {
     avi::Reader* rd;
     bool useAudio;
+    uint8_t audioBits;
 };
 
 // Runs on core 0. Owns the SD reads and the blocking audio writes, so the
@@ -82,9 +83,12 @@ static void readerTask(void* p) {
                 if (got <= 0) { s_stats.audioShortWrites++; break; }
                 if (a->useAudio) {
                     uint32_t w0 = micros();
-                    size_t w = audio::write(s_audioBuf, (size_t)got);
+                    size_t n = a->audioBits == 16 ? (size_t)got / 2 : (size_t)got;
+                    size_t w = a->audioBits == 16
+                                   ? audio::write16((const int16_t*)s_audioBuf, n)
+                                   : audio::write(s_audioBuf, n);
                     s_stats.winAudioWaitUs += micros() - w0;
-                    if (w < (size_t)got) s_stats.audioShortWrites++;
+                    if (w < n) s_stats.audioShortWrites++;
                 }
                 remain -= (uint32_t)got;
             }
@@ -203,9 +207,10 @@ bool play(const char* path, uint32_t reportEveryFrames, StopFn stop) {
                   info.hasAudio ? "yes" : "no", info.audioRate, info.audioChannels, info.audioBits,
                   info.fileSize / 1024);
 
-    bool useAudio = info.hasAudio && info.audioFormat == 1 && info.audioChannels == 1 && info.audioBits == 8;
+    bool useAudio = info.hasAudio && info.audioFormat == 1 && info.audioChannels == 1 &&
+                    (info.audioBits == 8 || info.audioBits == 16);
     if (info.hasAudio && !useAudio) {
-        Serial.println("[player] audio format unsupported (need PCM u8 mono), playing silent");
+        Serial.println("[player] audio format unsupported (need PCM mono, 8 or 16 bit), playing silent");
     }
 
     s_offX = ((int)DISPLAY_W - (int)info.width) / 2;
@@ -220,7 +225,7 @@ bool play(const char* path, uint32_t reportEveryFrames, StopFn stop) {
     s_stopReq = false;
     s_wasStopped = false;
 
-    if (useAudio && !audio::begin(info.audioRate)) {
+    if (useAudio && !audio::begin(info.audioRate, info.audioBits)) {
         Serial.println("[player] audio init failed, playing silent");
         useAudio = false;
     }
@@ -232,7 +237,7 @@ bool play(const char* path, uint32_t reportEveryFrames, StopFn stop) {
     xQueueReset(s_freeQ);
     xQueueReset(s_fullQ);
     for (int i = 0; i < kRingSlots; i++) xQueueSend(s_freeQ, &i, 0);
-    ReaderArgs args = {&rd, useAudio};
+    ReaderArgs args = {&rd, useAudio, (uint8_t)info.audioBits};
     TaskHandle_t reader = nullptr;
     xTaskCreatePinnedToCore(readerTask, "avi_reader", 4096, &args, 2, &reader, 0);
 

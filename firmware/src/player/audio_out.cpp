@@ -19,6 +19,8 @@ static const int kDmaBufFrames = 256;   // stereo frames per DMA buffer
 
 static bool s_running = false;
 static uint32_t s_rate = 0;
+static uint8_t s_bits = 8;
+static Backend s_backend = BACKEND_DAC;
 static QueueHandle_t s_events = nullptr;
 static uint64_t s_written = 0;        // mono samples handed to i2s_write
 static uint64_t s_descDone = 0;       // samples worth of DMA descriptors completed
@@ -63,15 +65,20 @@ static esp_err_t installOn(int core, i2s_config_t* cfg) {
     return a.err;
 }
 
-bool begin(uint32_t sampleRate, bool useApll) {
+void setBackend(Backend b) { s_backend = b; }
+Backend backend() { return s_backend; }
+
+bool begin(uint32_t sampleRate, uint8_t bits, bool useApll) {
     if (s_running) end();
+    s_bits = bits == 16 ? 16 : 8;
+    const bool dac = s_backend == BACKEND_DAC;
 
     i2s_config_t cfg = {};
-    cfg.mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX | I2S_MODE_DAC_BUILT_IN);
+    cfg.mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX | (dac ? I2S_MODE_DAC_BUILT_IN : 0));
     cfg.sample_rate = sampleRate;
     cfg.bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT;
     cfg.channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT;
-    cfg.communication_format = I2S_COMM_FORMAT_STAND_MSB;
+    cfg.communication_format = dac ? I2S_COMM_FORMAT_STAND_MSB : I2S_COMM_FORMAT_STAND_I2S;
     cfg.intr_alloc_flags = 0;
     cfg.dma_buf_count = kDmaBufCount;
     cfg.dma_buf_len = kDmaBufFrames;
@@ -83,13 +90,24 @@ bool begin(uint32_t sampleRate, bool useApll) {
         log_e("i2s_driver_install failed 0x%x", err);
         return false;
     }
-    // DAC channel 2 is GPIO26 (the CYD amp input); "left" in the driver's
-    // naming. Do NOT call i2s_set_pin(port, NULL) here: it enables both DAC
-    // channels, and channel 1 is GPIO25, the touch panel's bit-banged clock.
-    // With DAC1 driving that pad the XPT2046 reads as permanently pressed
-    // (z=4095) whenever audio is running (found 2026-09-05).
-    i2s_set_dac_mode(I2S_DAC_CHANNEL_LEFT_EN);
-    dac_output_disable(DAC_CHANNEL_1);
+    if (dac) {
+        // DAC channel 2 is GPIO26 (the CYD amp input); "left" in the
+        // driver's naming. Do NOT call i2s_set_pin(port, NULL) here: it
+        // enables both DAC channels, and channel 1 is GPIO25, the touch
+        // panel's bit-banged clock. With DAC1 driving that pad the XPT2046
+        // reads as permanently pressed (z=4095) whenever audio is running
+        // (found 2026-09-05).
+        i2s_set_dac_mode(I2S_DAC_CHANNEL_LEFT_EN);
+        dac_output_disable(DAC_CHANNEL_1);
+    } else {
+        i2s_pin_config_t pins = {};
+        pins.mck_io_num = I2S_PIN_NO_CHANGE;
+        pins.bck_io_num = PIN_I2S_BCLK;
+        pins.ws_io_num = PIN_I2S_LRCK;
+        pins.data_out_num = PIN_I2S_DOUT;
+        pins.data_in_num = I2S_PIN_NO_CHANGE;
+        i2s_set_pin(kPort, &pins);
+    }
     i2s_zero_dma_buffer(kPort);
 
     s_rate = sampleRate;
@@ -101,13 +119,15 @@ bool begin(uint32_t sampleRate, bool useApll) {
     // in the descriptor that just finished playing, so a sample written at
     // time T plays one ring-depth later, and the clock arithmetic in
     // samplesPlayed() holds. Also drain whatever events the install produced.
-    static uint8_t silence[kDmaBufFrames];
-    memset(silence, 128, sizeof(silence));
-    for (int i = 0; i < kDmaBufCount; i++) write(silence, kDmaBufFrames);
+    static int16_t silence[kDmaBufFrames];
+    memset(silence, 0, sizeof(silence));
+    for (int i = 0; i < kDmaBufCount; i++) write16(silence, kDmaBufFrames);
     s_written = 0;
     drainEvents();
     s_descDone = 0;
     s_underruns = 0;
+    Serial.printf("[audio] %s, %u Hz, %u-bit source, volume %u%%\n",
+                  dac ? "internal DAC" : "I2S amp", (unsigned)sampleRate, s_bits, s_volume);
     return true;
 }
 
@@ -116,7 +136,7 @@ void end() {
     i2s_driver_uninstall(kPort);
     s_events = nullptr;
     s_running = false;
-    dacWrite(PIN_AUDIO_DAC, 128);
+    if (s_backend == BACKEND_DAC) dacWrite(PIN_AUDIO_DAC, 128);
 }
 
 bool isRunning() { return s_running; }
@@ -148,6 +168,23 @@ void setVolume(uint8_t percent) {
 
 uint8_t volume() { return s_volume; }
 
+// Fill the stereo stage from `n` centred 16-bit values and hand it to the
+// driver. The DAC uses the top byte of an offset-binary word; the I2S amp
+// takes signed 16-bit.
+static size_t pushStage(size_t n) {
+    size_t wrote = 0;
+    i2s_write(kPort, s_stage, n * 4, &wrote, portMAX_DELAY);
+    size_t frames = wrote / 4;
+    s_written += frames;
+    return frames;
+}
+
+static inline uint16_t toWord(int centred) {
+    if (centred > 32767) centred = 32767;
+    if (centred < -32768) centred = -32768;
+    return s_backend == BACKEND_DAC ? (uint16_t)(centred + 32768) : (uint16_t)(int16_t)centred;
+}
+
 size_t write(const uint8_t* samples, size_t count) {
     if (!s_running) return 0;
     size_t done = 0;
@@ -156,17 +193,30 @@ size_t write(const uint8_t* samples, size_t count) {
         size_t n = count - done;
         if (n > (size_t)kDmaBufFrames) n = kDmaBufFrames;
         for (size_t i = 0; i < n; i++) {
-            // Scale around the midpoint into the top byte of the 16-bit
-            // slot (the DAC uses the top 8 bits), keeping the fractional
-            // bits so low volumes are not needlessly coarse.
-            int v = 128 * 256 + ((int)samples[done + i] - 128) * gain;
-            s_stage[i * 2] = (uint16_t)v;
-            s_stage[i * 2 + 1] = (uint16_t)v;
+            uint16_t v = toWord(((int)samples[done + i] - 128) * gain);
+            s_stage[i * 2] = v;
+            s_stage[i * 2 + 1] = v;
         }
-        size_t wrote = 0;
-        i2s_write(kPort, s_stage, n * 4, &wrote, portMAX_DELAY);
-        size_t frames = wrote / 4;
-        s_written += frames;
+        size_t frames = pushStage(n);
+        done += frames;
+        if (frames < n) break;
+    }
+    return done;
+}
+
+size_t write16(const int16_t* samples, size_t count) {
+    if (!s_running) return 0;
+    size_t done = 0;
+    const int gain = s_gain;
+    while (done < count) {
+        size_t n = count - done;
+        if (n > (size_t)kDmaBufFrames) n = kDmaBufFrames;
+        for (size_t i = 0; i < n; i++) {
+            uint16_t v = toWord(((int)samples[done + i] * gain) >> 8);
+            s_stage[i * 2] = v;
+            s_stage[i * 2 + 1] = v;
+        }
+        size_t frames = pushStage(n);
         done += frames;
         if (frames < n) break;
     }
@@ -219,7 +269,7 @@ void selfTest() {
     const uint32_t rates[] = {8000, 16000, 22050, 32000, 44100};
     for (int apll = 0; apll < 2; apll++) {
         for (uint32_t r : rates) {
-            if (!begin(r, apll != 0)) continue;
+            if (!begin(r, 8, apll != 0)) continue;
             uint32_t hz = calibrate(r);   // one second of samples
             Serial.printf("[audio] selftest rate=%u apll=%d -> measured %u Hz (x%.2f)\n",
                           (unsigned)r, apll, (unsigned)hz, r ? hz / (float)r : 0.0f);
