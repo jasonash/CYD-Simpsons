@@ -25,10 +25,13 @@ static void post(Event ev) {
     xQueueSend(s_events, &v, 0);
 }
 
+static uint16_t s_lastZ = 0;
+
 static bool panelPressed() {
     // The bit-banged read costs ~1 ms; the pressure reading alone is enough
     // for tap/hold, coordinates are not needed yet.
     TouchPoint p = s_touch.getTouch();
+    s_lastZ = p.zRaw;
     return p.zRaw > 0;
 }
 
@@ -49,6 +52,7 @@ static void inputTask(void*) {
         if (raw != down && now - rawSince >= kDebounceMs) {
             down = raw;
             s_pressed = down;
+            Serial.printf("[input] %s z=%u\n", down ? "down" : "up", (unsigned)s_lastZ);
             if (down) {
                 downSince = now;
                 holdFired = false;

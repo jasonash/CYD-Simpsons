@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include <string.h>
 
+#include "driver/dac.h"
 #include "driver/i2s.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
@@ -47,9 +48,13 @@ bool begin(uint32_t sampleRate, bool useApll) {
         log_e("i2s_driver_install failed 0x%x", err);
         return false;
     }
-    i2s_set_pin(kPort, nullptr);
-    // DAC channel 2 is GPIO26 (the CYD amp input); "left" in the driver's naming.
+    // DAC channel 2 is GPIO26 (the CYD amp input); "left" in the driver's
+    // naming. Do NOT call i2s_set_pin(port, NULL) here: it enables both DAC
+    // channels, and channel 1 is GPIO25, the touch panel's bit-banged clock.
+    // With DAC1 driving that pad the XPT2046 reads as permanently pressed
+    // (z=4095) whenever audio is running (found 2026-09-05).
     i2s_set_dac_mode(I2S_DAC_CHANNEL_LEFT_EN);
+    dac_output_disable(DAC_CHANNEL_1);
     i2s_zero_dma_buffer(kPort);
 
     s_rate = sampleRate;
