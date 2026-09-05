@@ -16,7 +16,9 @@
 #include "player/sd_card.h"
 #include "tv/input.h"
 #include "tv/library.h"
+#include "tv/menu.h"
 #include "tv/noise_probe.h"
+#include "tv/settings.h"
 
 static TFT_eSPI tft;
 
@@ -41,8 +43,8 @@ static void showMessage(const char* line1, const char* line2) {
     tft.drawString(line2, 8, 130, 2);
 }
 
-// Called by the player once per frame. A tap ends the episode; a hold will
-// open the settings menu once it exists and is treated as a tap until then.
+// Called by the player once per frame. A tap ends the episode; a hold opens
+// the settings menu.
 static bool stopOnInput() {
     input::Event ev = input::poll();
     if (ev == input::NONE) return false;
@@ -61,7 +63,8 @@ void setup() {
     setLed(true, false, false);
 
     tft.init();
-    tft.setRotation(TFT_ROTATION);
+    settings::load();
+    settings::apply(&tft);
     tft.fillScreen(TFT_BLACK);
     if (!player::initDisplayDma(&tft)) Serial.println("Display DMA unavailable");
 
@@ -89,6 +92,22 @@ void setup() {
 
     player::begin(&tft);
     input::begin();
+    input::setFlipped(settings::values().flip);
+
+    // Fallback if the menu is unreadable (wrong panel variant): hold the
+    // screen during boot to flip the colours.
+    delay(150);
+    if (input::pressed()) {
+        settings::values().invert = !settings::values().invert;
+        settings::save();
+        tft.invertDisplay(settings::values().invert);
+        showMessage("Colours flipped", "Release the screen");
+        Serial.println("Boot touch: colours flipped");
+        while (input::pressed()) delay(20);
+        input::flush();
+        tft.fillScreen(TFT_BLACK);
+    }
+
     setLed(false, true, false);
     s_ready = true;
 }
@@ -99,6 +118,7 @@ void loop() {
         return;
     }
     const char* path = library::next();
+    tft.invertDisplay(settings::values().invert);
     Serial.printf("Playing %s\n", library::currentName());
     if (!player::play(path, 100, stopOnInput)) {
         showMessage("Cannot play", library::currentName());
@@ -114,7 +134,14 @@ void loop() {
             input::flush();
             return;
         }
-        Serial.printf("Input: %s, changing episode\n", s_pending == input::HOLD ? "hold" : "tap");
+        if (s_pending == input::HOLD) {
+            s_pending = input::NONE;
+            Serial.println("Input: hold, settings menu");
+            menu::run(&tft);
+            input::setFlipped(settings::values().flip);
+            return;
+        }
+        Serial.println("Input: tap, changing episode");
         s_pending = input::NONE;
         fx::tvStatic(&tft, kStaticMs);
         input::flush();

@@ -25,4 +25,11 @@ void flush();
 // True while the panel is pressed. Cheap.
 bool pressed();
 
+// Screen position (in the current rotation) where the last press started.
+// Returns false if there has been no press yet.
+bool lastPoint(int* x, int* y);
+
+// Tell the mapper the screen is rotated 180 degrees (settings::flip).
+void setFlipped(bool flipped);
+
 }  // namespace input

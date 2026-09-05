@@ -10,6 +10,7 @@
 #include "../boards/board.h"
 #include "../player/audio_out.h"
 #include "../player/player.h"
+#include "settings.h"
 
 namespace input {
 
@@ -32,13 +33,29 @@ static void post(Event ev) {
 }
 
 static uint16_t s_lastZ = 0;
+static uint16_t s_rawX = 0, s_rawY = 0;
+static volatile int s_pointX = -1, s_pointY = -1;
+static volatile bool s_flipped = false;
 
 static bool panelPressed() {
-    // The bit-banged read costs ~1 ms; the pressure reading alone is enough
-    // for tap/hold, coordinates are not needed yet.
+    // The bit-banged read costs ~1 ms.
     TouchPoint p = s_touch.getTouch();
     s_lastZ = p.zRaw;
+    s_rawX = p.xRaw;
+    s_rawY = p.yRaw;
     return p.zRaw >= kMinZ;
+}
+
+// Raw ADC to screen pixels for TFT_ROTATION (checked in bring-up: dots
+// track the finger). Flip mirrors both axes.
+static void mapPoint() {
+    int x = map(s_rawX, TOUCH_RAW_MIN, TOUCH_RAW_MAX, 0, DISPLAY_W);
+    int y = map(s_rawY, TOUCH_RAW_MIN, TOUCH_RAW_MAX, 0, DISPLAY_H);
+    x = constrain(x, 0, DISPLAY_W - 1);
+    y = constrain(y, 0, DISPLAY_H - 1);
+    if (s_flipped) { x = DISPLAY_W - 1 - x; y = DISPLAY_H - 1 - y; }
+    s_pointX = x;
+    s_pointY = y;
 }
 
 static void inputTask(void*) {
@@ -58,10 +75,12 @@ static void inputTask(void*) {
         if (raw != down && now - rawSince >= kDebounceMs) {
             down = raw;
             s_pressed = down;
-            Serial.printf("[input] %s z=%u\n", down ? "down" : "up", (unsigned)s_lastZ);
+            Serial.printf("[input] %s z=%u at %d,%d\n", down ? "down" : "up", (unsigned)s_lastZ,
+                          (int)s_pointX, (int)s_pointY);
             if (down) {
                 downSince = now;
                 holdFired = false;
+                mapPoint();
             } else if (!holdFired) {
                 post(TAP);
             }
@@ -84,6 +103,10 @@ static void inputTask(void*) {
             } else if (c == 't') {
                 s_pollPanel = !s_pollPanel;
                 Serial.printf("[input] panel polling %s\n", s_pollPanel ? "on" : "off");
+            } else if (c == 'i') {
+                settings::values().invert = !settings::values().invert;
+                settings::save();
+                Serial.printf("[settings] invert %d (takes effect on next episode)\n", (int)settings::values().invert);
             } else if (c == 'b') {
                 player::setBusyMs(player::busyMs() ? 0 : 30);
                 Serial.printf("[player] busy loop %u ms\n", (unsigned)player::busyMs());
@@ -116,5 +139,14 @@ void flush() {
 }
 
 bool pressed() { return s_pressed; }
+
+bool lastPoint(int* x, int* y) {
+    if (s_pointX < 0) return false;
+    *x = s_pointX;
+    *y = s_pointY;
+    return true;
+}
+
+void setFlipped(bool flipped) { s_flipped = flipped; }
 
 }  // namespace input
