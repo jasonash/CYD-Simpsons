@@ -22,6 +22,12 @@ void selfTest();
 void end();
 bool isRunning();
 
+// Master volume, 0-100 percent of full scale. Applied in write() as a
+// linear scale of the sample around the DAC midpoint (the onboard amp has
+// no gain control). Persists across begin()/end(); default 25.
+void setVolume(uint8_t percent);
+uint8_t volume();
+
 // Push u8 mono samples. Blocks when the DMA queue is full, which is the
 // intended behaviour: it throttles the file reader to real time.
 // Returns the number of samples accepted. Safe to call from a different

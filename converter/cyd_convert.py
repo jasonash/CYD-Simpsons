@@ -24,6 +24,7 @@ import json
 import shutil
 import subprocess
 import sys
+import dataclasses
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -45,6 +46,9 @@ PRESETS: dict[str, Preset] = {
     "quality": Preset(288, 160, 24, 6, 22050, "Largest files, smoothest motion"),
     "balanced": Preset(288, 160, 20, 8, 16000, "Default. Should fit the SD budget"),
     "smallest": Preset(224, 128, 20, 10, 16000, "For slow cards or big libraries"),
+    # The panel is 320x240 (4:3); the 16:10 presets above leave bars all
+    # round. Full-panel decode costs 1.67x the pixels of balanced.
+    "full": Preset(320, 240, 20, 8, 16000, "Fills the 320x240 panel; needs the DMA blit"),
 }
 
 VIDEO_EXTS = {".mkv", ".mp4", ".avi", ".mov", ".m4v", ".webm", ".ts", ".wmv"}
@@ -143,6 +147,8 @@ def main() -> int:
     ap.add_argument("--out", type=Path, default=Path("out"), help="output directory")
     ap.add_argument("--dry-run", action="store_true", help="print ffmpeg commands only")
     ap.add_argument("--force", action="store_true", help="re-encode even if output exists")
+    ap.add_argument("--fps", type=int, help="override the preset frame rate")
+    ap.add_argument("--qscale", type=int, help="override the preset JPEG qscale (2 best .. 31 worst)")
     ns = ap.parse_args()
 
     if not ns.dry_run:
@@ -150,6 +156,9 @@ def main() -> int:
         require_tool("ffprobe")
 
     preset = PRESETS[ns.preset]
+    if ns.fps or ns.qscale:
+        preset = dataclasses.replace(preset, fps=ns.fps or preset.fps,
+                                     qscale=ns.qscale or preset.qscale)
     inputs = collect_inputs(ns.inputs)
     if not inputs:
         sys.exit("error: no input files")

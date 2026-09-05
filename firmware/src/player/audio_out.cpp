@@ -22,6 +22,9 @@ static QueueHandle_t s_events = nullptr;
 static uint64_t s_written = 0;        // mono samples handed to i2s_write
 static uint64_t s_descDone = 0;       // samples worth of DMA descriptors completed
 static uint32_t s_underruns = 0;
+static const uint8_t kDefaultVolume = 25;   // the CYD amp is loud (2026-09-05)
+static uint8_t s_volume = kDefaultVolume;
+static int s_gain = kDefaultVolume * 256 / 100;   // 8.8 fixed point
 
 // Staging buffer: u8 mono -> 16-bit stereo, both channels identical.
 static uint16_t s_stage[kDmaBufFrames * 2];
@@ -105,16 +108,28 @@ static void drainEvents() {
     }
 }
 
+void setVolume(uint8_t percent) {
+    if (percent > 100) percent = 100;
+    s_volume = percent;
+    s_gain = percent * 256 / 100;
+}
+
+uint8_t volume() { return s_volume; }
+
 size_t write(const uint8_t* samples, size_t count) {
     if (!s_running) return 0;
     size_t done = 0;
+    const int gain = s_gain;
     while (done < count) {
         size_t n = count - done;
         if (n > (size_t)kDmaBufFrames) n = kDmaBufFrames;
         for (size_t i = 0; i < n; i++) {
-            uint16_t v = (uint16_t)samples[done + i] << 8;
-            s_stage[i * 2] = v;
-            s_stage[i * 2 + 1] = v;
+            // Scale around the midpoint into the top byte of the 16-bit
+            // slot (the DAC uses the top 8 bits), keeping the fractional
+            // bits so low volumes are not needlessly coarse.
+            int v = 128 * 256 + ((int)samples[done + i] - 128) * gain;
+            s_stage[i * 2] = (uint16_t)v;
+            s_stage[i * 2 + 1] = (uint16_t)v;
         }
         size_t wrote = 0;
         i2s_write(kPort, s_stage, n * 4, &wrote, portMAX_DELAY);
