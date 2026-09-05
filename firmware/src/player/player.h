@@ -31,6 +31,11 @@ struct Stats {
     uint32_t maxFrameBytes = 0;
 };
 
+// Attach TFT_eSPI's DMA engine. Call right after tft.init(), before the SD
+// card is mounted (DMA channel allocation order). Returns false if DMA is
+// unavailable; the player then falls back to CPU pushes.
+bool initDisplayDma(TFT_eSPI* tft);
+
 // Attach the display. Must be initialised and rotated by the caller.
 void begin(TFT_eSPI* tft);
 

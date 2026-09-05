@@ -30,6 +30,17 @@ struct Slot {
 
 static TFT_eSPI* s_tft = nullptr;
 static JPEGDEC s_jpeg;
+static bool s_dma = false;
+static bool s_dmaInit = false;   // set by initDisplayDma()
+
+// Attach TFT_eSPI's DMA engine. Call after tft.init() and BEFORE the SD
+// driver is started, so the display gets DMA channel 1 and the SD driver's
+// automatic pick lands on channel 2.
+bool initDisplayDma(TFT_eSPI* tft) {
+    s_dmaInit = tft->initDMA();
+    return s_dmaInit;
+}
+static bool dmaAvailable() { return s_dmaInit; }
 static Slot s_ring[kRingSlots];
 static uint8_t* s_audioBuf = nullptr;
 static Stats s_stats;
@@ -108,9 +119,17 @@ static void readerTask(void* p) {
     vTaskDelete(nullptr);
 }
 
-// JPEGDEC hands us one MCU-row block at a time; push it straight to the panel.
+// JPEGDEC hands us one block of MCUs at a time; push it straight to the
+// panel. With DMA, JPEGDEC alternates between the two halves of its pixel
+// buffer (JPEG_USES_DMA), so this block can go out over SPI while the next
+// one decodes. pushImageDMA waits for the previous transfer, swaps bytes in
+// place, and queues this one.
 static int drawMcu(JPEGDRAW* d) {
-    s_tft->pushImage(d->x + s_offX, d->y + s_offY, d->iWidth, d->iHeight, d->pPixels);
+    if (s_dma) {
+        s_tft->pushImageDMA(d->x + s_offX, d->y + s_offY, d->iWidth, d->iHeight, d->pPixels);
+    } else {
+        s_tft->pushImage(d->x + s_offX, d->y + s_offY, d->iWidth, d->iHeight, d->pPixels);
+    }
     return 1;
 }
 
@@ -129,6 +148,11 @@ void begin(TFT_eSPI* tft) {
     // as blue on the ILI9341 (2026-09-03).
     s_jpeg.setPixelType(RGB565_LITTLE_ENDIAN);
     s_tft->setSwapBytes(true);
+    // The DMA engine must be attached before the SD driver takes a DMA
+    // channel (main.cpp calls initDMA right after tft.init()). If that did
+    // not happen, fall back to CPU-driven pushes.
+    s_dma = dmaAvailable();
+    Serial.printf("[player] display DMA %s\n", s_dma ? "on" : "off");
 }
 
 const Stats& stats() { return s_stats; }
@@ -247,8 +271,13 @@ bool play(const char* path, uint32_t reportEveryFrames, StopFn stop) {
             s_stats.avDriftMs = (int32_t)ptsMs - (int32_t)nowMs;
             uint32_t d0 = micros();
             if (s_jpeg.openRAM(sl.buf, sl.len, drawMcu)) {
-                s_jpeg.decode(0, 0, 0);
+                if (s_dma) s_tft->startWrite();
+                s_jpeg.decode(0, 0, s_dma ? JPEG_USES_DMA : 0);
                 s_jpeg.close();
+                if (s_dma) {
+                    s_tft->dmaWait();
+                    s_tft->endWrite();
+                }
                 if (s_busyMs) {
                     uint32_t b0 = micros();
                     while (micros() - b0 < s_busyMs * 1000) { /* spin */ }

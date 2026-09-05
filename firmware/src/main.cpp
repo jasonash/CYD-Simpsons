@@ -63,6 +63,7 @@ void setup() {
     tft.init();
     tft.setRotation(TFT_ROTATION);
     tft.fillScreen(TFT_BLACK);
+    if (!player::initDisplayDma(&tft)) Serial.println("Display DMA unavailable");
 
     Serial.printf("Heap: %u free, %u largest block\n",
                   (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMaxAllocHeap());
