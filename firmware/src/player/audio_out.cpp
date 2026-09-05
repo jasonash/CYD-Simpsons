@@ -7,6 +7,7 @@
 #include "driver/i2s.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
+#include "freertos/task.h"
 
 #include "../boards/board.h"
 
@@ -30,6 +31,37 @@ static int s_gain = kDefaultVolume * 256 / 100;   // 8.8 fixed point
 static uint16_t s_stage[kDmaBufFrames * 2];
 
 static void drainEvents();
+static int s_isrCore = -1;
+
+void setIsrCore(int core) { s_isrCore = core; }
+int isrCore() { return s_isrCore; }
+
+struct InstallArgs {
+    i2s_config_t* cfg;
+    esp_err_t err;
+    TaskHandle_t caller;
+};
+
+static void installTask(void* p) {
+    InstallArgs* a = (InstallArgs*)p;
+    a->err = i2s_driver_install(kPort, a->cfg, kDmaBufCount * 4, &s_events);
+    xTaskNotifyGive(a->caller);
+    vTaskDelete(nullptr);
+}
+
+// Install the driver from a task pinned to the requested core so the ISR
+// lands there; otherwise install inline.
+static esp_err_t installOn(int core, i2s_config_t* cfg) {
+    if (core < 0 || core == xPortGetCoreID()) {
+        return i2s_driver_install(kPort, cfg, kDmaBufCount * 4, &s_events);
+    }
+    InstallArgs a = {cfg, ESP_FAIL, xTaskGetCurrentTaskHandle()};
+    if (xTaskCreatePinnedToCore(installTask, "i2s_inst", 3072, &a, 5, nullptr, core) != pdPASS) {
+        return ESP_FAIL;
+    }
+    ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+    return a.err;
+}
 
 bool begin(uint32_t sampleRate, bool useApll) {
     if (s_running) end();
@@ -46,7 +78,7 @@ bool begin(uint32_t sampleRate, bool useApll) {
     cfg.use_apll = useApll;
     cfg.tx_desc_auto_clear = true;   // output zeros on underrun, not a repeat
 
-    esp_err_t err = i2s_driver_install(kPort, &cfg, kDmaBufCount * 4, &s_events);
+    esp_err_t err = installOn(s_isrCore, &cfg);
     if (err != ESP_OK) {
         log_e("i2s_driver_install failed 0x%x", err);
         return false;

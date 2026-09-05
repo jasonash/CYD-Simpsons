@@ -26,6 +26,8 @@ struct Stats {
     uint32_t winSyncWaitUs = 0;     // time deliberately waiting for the clock
     uint32_t winStartMs = 0;
     int32_t avDriftMs = 0;          // video time minus audio clock at last frame
+    uint32_t winAudioQueueMin = 0;  // lowest DMA occupancy seen this window, samples
+    uint32_t audioShortWrites = 0;  // audio chunks that were not fully read or written
     uint32_t maxFrameBytes = 0;
 };
 
@@ -42,6 +44,10 @@ bool play(const char* path, uint32_t reportEveryFrames = 100, StopFn stop = null
 
 // True if the last play() ended because `stop` asked for it.
 bool wasStopped();
+
+// Bench experiment: burn this many ms on core 1 after every decoded frame.
+void setBusyMs(uint32_t ms);
+uint32_t busyMs();
 
 const Stats& stats();
 

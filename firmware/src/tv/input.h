@@ -9,6 +9,7 @@ enum Event {
     NONE = 0,
     TAP,    // press and release, shorter than the hold time
     HOLD,   // press held past the hold time (fires once, on the threshold)
+    PROBE,  // serial 'x': run the noise probe (bench only)
 };
 
 // Start the polling task. Safe to call once.

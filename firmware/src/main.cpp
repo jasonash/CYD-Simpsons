@@ -16,6 +16,7 @@
 #include "player/sd_card.h"
 #include "tv/input.h"
 #include "tv/library.h"
+#include "tv/noise_probe.h"
 
 static TFT_eSPI tft;
 
@@ -106,6 +107,12 @@ void loop() {
         return;
     }
     if (player::wasStopped()) {
+        if (s_pending == input::PROBE) {
+            s_pending = input::NONE;
+            probe::run(&tft, library::current());
+            input::flush();
+            return;
+        }
         Serial.printf("Input: %s, changing episode\n", s_pending == input::HOLD ? "hold" : "tap");
         s_pending = input::NONE;
         fx::tvStatic(&tft, kStaticMs);

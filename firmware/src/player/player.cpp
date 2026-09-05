@@ -68,11 +68,12 @@ static void readerTask(void* p) {
                 uint32_t r0 = micros();
                 int got = rd.readChunk(s_audioBuf, take);
                 s_stats.winReadUs += micros() - r0;
-                if (got <= 0) break;
+                if (got <= 0) { s_stats.audioShortWrites++; break; }
                 if (a->useAudio) {
                     uint32_t w0 = micros();
-                    audio::write(s_audioBuf, (size_t)got);
+                    size_t w = audio::write(s_audioBuf, (size_t)got);
                     s_stats.winAudioWaitUs += micros() - w0;
+                    if (w < (size_t)got) s_stats.audioShortWrites++;
                 }
                 remain -= (uint32_t)got;
             }
@@ -141,18 +142,24 @@ static void report(const avi::Info& info) {
     float audioWait = s.winFrames ? s.winAudioWaitUs / 1000.0f / s.winFrames : 0.0f;
     float syncWait = s.winFrames ? s.winSyncWaitUs / 1000.0f / s.winFrames : 0.0f;
     Serial.printf("[player] t=%5.1fs fps=%5.2f shown=%u drop=%u bad=%u | decode avg %.1f max %.1f ms | "
-                  "sd %.1f ms | i2s wait %.1f ms | sync wait %.1f ms | drift %+d ms | underrun %u | maxfrm %u B | heap %u\n",
+                  "sd %.1f ms | i2s wait %.1f ms | sync wait %.1f ms | drift %+d ms | underrun %u | aq min %u | short %u | maxfrm %u B | heap %u\n",
                   s.elapsedMs / 1000.0f, fps, s.framesShown, s.framesDropped, s.framesBad,
                   decAvg, s.winDecodeMaxUs / 1000.0f, readAvg, audioWait, syncWait,
-                  (int)s.avDriftMs, (unsigned)s.audioUnderruns, (unsigned)s.maxFrameBytes,
+                  (int)s.avDriftMs, (unsigned)s.audioUnderruns, (unsigned)s.winAudioQueueMin,
+                  (unsigned)s.audioShortWrites, (unsigned)s.maxFrameBytes,
                   (unsigned)ESP.getFreeHeap());
     s.winFrames = 0;
     s.winDecodeUs = s.winDecodeMaxUs = s.winReadUs = 0;
     s.winAudioWaitUs = s.winSyncWaitUs = 0;
+    s.winAudioQueueMin = UINT32_MAX;
     s.winStartMs = millis();
 }
 
 bool wasStopped() { return s_wasStopped; }
+
+static uint32_t s_busyMs = 0;
+void setBusyMs(uint32_t ms) { s_busyMs = ms; }
+uint32_t busyMs() { return s_busyMs; }
 
 bool play(const char* path, uint32_t reportEveryFrames, StopFn stop) {
     if (!s_tft || !s_ring[0].buf || !s_audioBuf) {
@@ -185,6 +192,7 @@ bool play(const char* path, uint32_t reportEveryFrames, StopFn stop) {
 
     s_stats = Stats();
     s_stats.winStartMs = millis();
+    s_stats.winAudioQueueMin = UINT32_MAX;
     s_stopReq = false;
     s_wasStopped = false;
 
@@ -241,6 +249,10 @@ bool play(const char* path, uint32_t reportEveryFrames, StopFn stop) {
             if (s_jpeg.openRAM(sl.buf, sl.len, drawMcu)) {
                 s_jpeg.decode(0, 0, 0);
                 s_jpeg.close();
+                if (s_busyMs) {
+                    uint32_t b0 = micros();
+                    while (micros() - b0 < s_busyMs * 1000) { /* spin */ }
+                }
                 uint32_t dus = micros() - d0;
                 s_stats.winDecodeUs += dus;
                 if (dus > s_stats.winDecodeMaxUs) s_stats.winDecodeMaxUs = dus;
@@ -254,7 +266,11 @@ bool play(const char* path, uint32_t reportEveryFrames, StopFn stop) {
 
         presented++;
         s_stats.elapsedMs = millis() - t0;
-        if (useAudio) s_stats.audioUnderruns = audio::underruns();
+        if (useAudio) {
+            s_stats.audioUnderruns = audio::underruns();
+            uint32_t q = audio::queuedSamples();
+            if (q < s_stats.winAudioQueueMin) s_stats.winAudioQueueMin = q;
+        }
         if (reportEveryFrames && (presented % reportEveryFrames) == 0) report(info);
     }
 

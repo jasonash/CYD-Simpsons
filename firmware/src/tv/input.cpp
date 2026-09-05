@@ -9,6 +9,7 @@
 
 #include "../boards/board.h"
 #include "../player/audio_out.h"
+#include "../player/player.h"
 
 namespace input {
 
@@ -76,12 +77,19 @@ static void inputTask(void*) {
             int c = Serial.read();
             if (c == 'n') post(TAP);
             else if (c == 'm') post(HOLD);
+            else if (c == 'x') post(PROBE);
             else if (c >= '0' && c <= '9') {
                 audio::setVolume(c == '0' ? 100 : (c - '0') * 10);
                 Serial.printf("[audio] volume %u%%\n", audio::volume());
             } else if (c == 't') {
                 s_pollPanel = !s_pollPanel;
                 Serial.printf("[input] panel polling %s\n", s_pollPanel ? "on" : "off");
+            } else if (c == 'b') {
+                player::setBusyMs(player::busyMs() ? 0 : 30);
+                Serial.printf("[player] busy loop %u ms\n", (unsigned)player::busyMs());
+            } else if (c == 'c') {
+                audio::setIsrCore(audio::isrCore() == 0 ? -1 : 0);
+                Serial.printf("[audio] i2s isr core for next play: %d\n", audio::isrCore());
             }
         }
 

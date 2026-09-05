@@ -16,6 +16,12 @@ namespace audio {
 // either way. The APLL is within 1% at every rate tested.
 bool begin(uint32_t sampleRate, bool useApll = true);
 
+// The I2S interrupt is serviced on the core that installs the driver. Pin
+// it to a core (0 or 1) for the next begin(); -1 = whichever core calls
+// begin(). Experiment 2026-09-05: clicks when core 1 is saturated.
+void setIsrCore(int core);
+int isrCore();
+
 // Diagnostic sweep: for several rates and both clock sources, start the
 // driver, calibrate, print the measured rate, stop. ~1 s per combination.
 void selfTest();
