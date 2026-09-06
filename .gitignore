@@ -31,3 +31,6 @@ converter/out/
 .idea/
 *.swp
 3D_Model/reference_materials
+
+# Raspberry Pi Plan B notes, local only
+RaspiVersion/
